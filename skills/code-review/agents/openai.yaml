@@ -1,0 +1,4 @@
+interface:
+  display_name: "ตรวจสอบโค้ด"
+  short_description: "ตรวจหาบั๊กและ regression พร้อมหลักฐานและผลกระทบ"
+  default_prompt: "ใช้ $code-review ตรวจโค้ดหรือ PR นี้ และรายงานบั๊กพร้อมตำแหน่ง ผลกระทบ และหลักฐาน"

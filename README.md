@@ -7,6 +7,7 @@
 | [code-review](skills/code-review/SKILL.md) | ตรวจบั๊กและ regression พร้อมหลักฐานและตำแหน่งโค้ด | `ใช้ $code-review ตรวจ branch นี้เทียบกับ main` |
 | [app-builder](skills/app-builder/SKILL.md) | สร้างโปรแกรมหรือเพิ่มฟีเจอร์ให้รันและตรวจรับได้ | `ใช้ $app-builder สร้าง Python CLI รวมไฟล์ CSV` |
 | [debug-and-fix](skills/debug-and-fix/SKILL.md) | ทำซ้ำอาการ หาสาเหตุ แก้ไข และตรวจผล | `ใช้ $debug-and-fix แก้ error นี้พร้อม regression test` |
+| [windows-simulator](skills/windows-simulator/SKILL.md) | เลือกและตั้งระบบจำลอง/ทดสอบ Windows พร้อมเทียบตัวเลือก | `ใช้ $windows-simulator ตั้งระบบทดสอบสคริปต์ PowerShell บน Windows` |
 
 ## ติดตั้ง
 

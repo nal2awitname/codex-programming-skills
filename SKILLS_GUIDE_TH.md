@@ -7,6 +7,7 @@
 | [code-review](skills/code-review/SKILL.md) | ตรวจบั๊กและ regression พร้อมตำแหน่ง ผลกระทบ และหลักฐาน | `ใช้ $code-review ตรวจ PR นี้ โดยเน้น logic และความเข้ากันได้กับข้อมูลเดิม` |
 | [app-builder](skills/app-builder/SKILL.md) | สร้างโปรแกรมหรือเพิ่มฟีเจอร์จนรันและตรวจรับได้ | `ใช้ $app-builder สร้าง CLI ด้วย Python สำหรับรวมไฟล์ CSV ตามรหัสสินค้า` |
 | [debug-and-fix](skills/debug-and-fix/SKILL.md) | ทำซ้ำอาการ หาสาเหตุ แก้บั๊ก และยืนยันผล | `ใช้ $debug-and-fix แก้ปัญหาตั้ง limit เป็น 0 แล้วกลับได้ค่าเริ่มต้น` |
+| [windows-simulator](skills/windows-simulator/SKILL.md) | เลือกและตั้งระบบจำลอง/ทดสอบ Windows (CI, VM, Docker, Wine) | `ใช้ $windows-simulator ตั้งระบบทดสอบสคริปต์ PowerShell บน Windows` |
 
 สกิลเหล่านี้เป็นขั้นตอนให้ AI ทำงานร่วมกับเครื่องมือและ runtime ที่มีในแต่ละแชต ความสามารถในการรัน ทดสอบ หรือเข้าถึง GitHub ขึ้นกับ environment และสิทธิ์ที่เชื่อมต่อไว้ ผลทดสอบต้องมาจากการรันจริง
 

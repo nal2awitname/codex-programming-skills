@@ -1,0 +1,43 @@
+name: Windows behavior rebuild toolkit
+on:
+  push:
+    paths:
+      - 'skills/rebuild-windows-from-behavior/**'
+      - 'tests/rebuild-windows-from-behavior/**'
+      - 'scripts/Install-WindowsBehaviorRebuild.ps1'
+      - '.github/workflows/windows-behavior-rebuild.yml'
+  pull_request:
+    paths:
+      - 'skills/rebuild-windows-from-behavior/**'
+      - 'tests/rebuild-windows-from-behavior/**'
+      - 'scripts/Install-WindowsBehaviorRebuild.ps1'
+      - '.github/workflows/windows-behavior-rebuild.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.10', '3.12']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m unittest discover -s tests/rebuild-windows-from-behavior -v
+      - name: Verify installer preview and no-overwrite behavior
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dest = Join-Path $env:RUNNER_TEMP 'independent-rebuild-skill'
+          & ./scripts/Install-WindowsBehaviorRebuild.ps1 -Destination $dest -WhatIf
+          if (Test-Path -LiteralPath $dest) { throw 'WhatIf wrote files' }
+          & ./scripts/Install-WindowsBehaviorRebuild.ps1 -Destination $dest
+          if (-not (Test-Path (Join-Path $dest 'SKILL.md'))) { throw 'Skill missing' }
+          $blocked = $false
+          try { & ./scripts/Install-WindowsBehaviorRebuild.ps1 -Destination $dest } catch { $blocked = $true }
+          if (-not $blocked) { throw 'Existing installation was overwritten' }

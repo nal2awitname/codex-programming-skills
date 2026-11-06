@@ -1,0 +1,8 @@
+{
+  "tool_version": "2.0.0",
+  "files_sha256": {
+    "contract.json": "5115485de869dfd1812d19c91574c74a4f5f93d1df6c58f6cb598eb47a7dacce",
+    "BUILDER.md": "5344d5ed3272d345c995a5a8ae48274101981927b76d20c94ff3dba8d7707257"
+  },
+  "separation": "data allowlist only; no enforced access isolation"
+}

@@ -1,0 +1,269 @@
+{
+  "passed": true,
+  "case_count": 29,
+  "passed_cases": 29,
+  "cases": [
+    {
+      "case_id": "CASE-001",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-002",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-003",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-004",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-005",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-006",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-007",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-008",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-009",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-010",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-011",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-012",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-013",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-014",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-015",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-016",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-017",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-018",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-019",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-020",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-021",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-022",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-023",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-024",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-025",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-026",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-027",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-028",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    },
+    {
+      "case_id": "CASE-029",
+      "reference_present": true,
+      "candidate_present": true,
+      "reference_matches_contract": true,
+      "candidate_matches_contract": true,
+      "candidate_matches_reference": true,
+      "passed": true
+    }
+  ],
+  "caveat": "Compares supplied captures exactly; does not run programs, certify observations, or prove full equivalence."
+}

@@ -1,0 +1,16 @@
+{
+  "environment": "Linux x86_64, Python 3.12.14",
+  "method": "Separate subprocess captures; only the analyst driver invokes the reference; new program and packaged tests do not depend on it.",
+  "contract_reference_cases": 29,
+  "additional_differential_cases": 109,
+  "additional_case_breakdown": {
+    "seeded_valid_arrays": 80,
+    "invalid_schema_or_type": 20,
+    "cli_argument_or_json_cases": 8,
+    "ten_thousand_integer_array": 1
+  },
+  "additional_mismatches": [],
+  "framing_failures": [],
+  "windows_runtime_exercised": false,
+  "scope_limit": "These finite observations do not prove hidden or exhaustive compatibility."
+}

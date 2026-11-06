@@ -13,7 +13,22 @@ The suite exercises non-execution and unchanged reference files during inspectio
 
 ## Cross-platform checks
 
-The workflow `.github/workflows/windows-behavior-rebuild.yml` runs Python 3.10 and 3.12 on Linux, Windows and macOS. Windows jobs also exercise the PowerShell wrapper and installer preview/install/no-overwrite behavior. Check the actual GitHub Actions run for the commit being reviewed; configuration alone does not mean a job passed.
+The published toolkit passed all six jobs on GitHub Actions: Linux, Windows and macOS, each on Python 3.10 and 3.12. Both Windows jobs also passed the PowerShell wrapper and installer preview/install/no-overwrite checks.
+
+- Tested commit: `723ac4fc02ef319114729dc64e4bad75e05c49ee`.
+- Actual completed run: [Windows behavior rebuild toolkit](https://github.com/nal2awitname/codex-programming-skills/actions/runs/42170906803), conclusion `success`.
+
+These results verify the toolkit and installer in the tested runner environments. They do not establish compatibility with every Windows desktop application. Check the actual run for any later commit under review.
+
+## Behavior-only reconstruction exercise
+
+A fresh agent observed a task-supplied synthetic CLI by invoking its public command; it was instructed not to read the reference source. It recorded 39 observations, audited eight requirements and 29 synthetic acceptance cases, then implemented an independent single-pass integer-list summary. No original source was passed to that agent. It used the same context for behavior observation and building, with a shared filesystem and no enforced original-access restriction; this is not an enforced clean room or a proof of originality.
+
+- Candidate acceptance: 29/29; independent mathematical/example tests: 9/9 (10 unittest methods including the acceptance method).
+- Actual separately executed reference/candidate comparisons: 29/29 contract cases and 109/109 additional cases, all matched on Linux/Python 3.12.14.
+- The additional set contains 80 seeded valid arrays, 20 invalid structures/types, eight CLI/JSON cases and one 10,000-integer array.
+- Only the clean new implementation, contract, independent tests and neutral verification summaries are published in [the runnable example](../../examples/rebuild-windows-from-behavior/README.md). Original-facing capture drivers, reference code and private analyst records are excluded.
+- The workflow now also runs the candidate example tests across all six matrix jobs and a `.cmd` launcher smoke check in the two Windows jobs. These are candidate-side checks; the reference differential run above was Linux-only. See the actual Actions status for the commit being reviewed.
 
 ## Limits
 

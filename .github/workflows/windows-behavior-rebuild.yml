@@ -4,12 +4,14 @@ on:
     paths:
       - 'skills/rebuild-windows-from-behavior/**'
       - 'tests/rebuild-windows-from-behavior/**'
+      - 'examples/rebuild-windows-from-behavior/**'
       - 'scripts/Install-WindowsBehaviorRebuild.ps1'
       - '.github/workflows/windows-behavior-rebuild.yml'
   pull_request:
     paths:
       - 'skills/rebuild-windows-from-behavior/**'
       - 'tests/rebuild-windows-from-behavior/**'
+      - 'examples/rebuild-windows-from-behavior/**'
       - 'scripts/Install-WindowsBehaviorRebuild.ps1'
       - '.github/workflows/windows-behavior-rebuild.yml'
   workflow_dispatch:
@@ -29,6 +31,17 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m unittest discover -s tests/rebuild-windows-from-behavior -v
+      - name: Test independently rebuilt example
+        working-directory: examples/rebuild-windows-from-behavior
+        run: python -m unittest discover -s tests -v
+      - name: Verify Windows example launcher
+        if: runner.os == 'Windows'
+        shell: cmd
+        working-directory: examples/rebuild-windows-from-behavior
+        run: |
+          call range_totals.cmd "{\"values\":[6,2,9]}" > launcher-result.json
+          if errorlevel 1 exit /b 1
+          python -c "import json,pathlib; actual=json.loads(pathlib.Path('launcher-result.json').read_text()); assert actual==dict(count=3,span=7,total=17),actual"
       - name: Verify installer preview and no-overwrite behavior
         if: runner.os == 'Windows'
         shell: pwsh

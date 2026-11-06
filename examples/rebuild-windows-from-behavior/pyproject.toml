@@ -1,0 +1,11 @@
+[project]
+name = "range-totals-cli"
+version = "1.0.0"
+description = "Portable integer-list summary CLI from a behavior-only contract"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.range_totals]
+entrypoint = "range_totals.py"
+contract = "docs/contract.json"
+test-command = "python -m unittest discover -s tests -v"

@@ -82,6 +82,8 @@ python -m unittest discover -s tests/rebuild-windows-from-behavior -v
 
 เพิ่มความสามารถโดยเริ่มจากข้อกำหนดและกรณีทดสอบสังเคราะห์ แล้วเพิ่ม detector/adapter โดยไม่รันเป้าหมายระหว่าง static triage อย่าเปลี่ยน schema หรือยอมให้ส่งออกโฟลเดอร์วิเคราะห์ทั้งชุดโดยไม่ทบทวนขอบเขตข้อมูล
 
+มี [ตัวอย่างโปรแกรมที่สร้างใหม่จากพฤติกรรม](../../examples/rebuild-windows-from-behavior/README.md) พร้อมข้อกำหนดและชุดทดสอบที่เขียนเอง โดยไม่รวมโค้ดอ้างอิง
+
 สถานะการทดสอบและข้อจำกัดของรุ่นนี้บันทึกใน [VALIDATION_V2.md](VALIDATION_V2.md) ผลใน GitHub Actions เป็นผลจริงของแต่ละระบบ ไม่ใช้ผล Linux แทนการยืนยัน Windows
 
-ตำแหน่งติดตั้งแบบผู้ใช้ของ Codex อ้างอิง [เอกสาร OpenAI](https://developers.openai.com/api/reference/cli#use-the-cli-from-a-coding-agent) ตรวจเมื่อ 6 พฤศจิกายน 2026
+ตำแหน่งติดตั้งแบบผู้ใช้ของ Codex อ้างอิง [เอกสาร OpenAI](https://learn.chatgpt.com/docs/build-skills) ตรวจเมื่อ 6 พฤศจิกายน 2026

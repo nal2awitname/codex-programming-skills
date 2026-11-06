@@ -1,0 +1,913 @@
+{
+  "schema_version": 1,
+  "project": {
+    "name": "RangeTotalsCLI",
+    "platform": "Windows CLI; Python 3.10+; host verification required"
+  },
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "description": "A parsed request must be an object containing exactly the property values. Missing or additional properties, or a non-object request, return the JSON object with error equal to invalid_request. This shape check takes precedence over validation of the value.",
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-007",
+        "OBS-012",
+        "OBS-020",
+        "OBS-039"
+      ]
+    },
+    {
+      "id": "REQ-002",
+      "description": "The values property must be an array whose elements are JSON integers. Reject booleans, null, strings, objects, nested arrays, decimal tokens and exponential tokens, including numerically integral decimal tokens, by returning error equal to integer_list_required.",
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-006",
+        "OBS-008",
+        "OBS-010",
+        "OBS-011",
+        "OBS-014",
+        "OBS-023",
+        "OBS-033"
+      ]
+    },
+    {
+      "id": "REQ-003",
+      "description": "For a nonempty valid array, return exactly count, span and total: the number of supplied elements, the difference between the greatest and least supplied integer, and the exact sum. Duplicates and order do not change these definitions.",
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-001",
+        "OBS-003",
+        "OBS-004",
+        "OBS-005",
+        "OBS-031"
+      ]
+    },
+    {
+      "id": "REQ-004",
+      "description": "For an empty valid array, return count equal to 0, span equal to JSON null, and total equal to 0.",
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-002"
+      ]
+    },
+    {
+      "id": "REQ-005",
+      "description": "Preserve exact integer arithmetic for the exercised large integer inputs, including values with magnitude 10 to the power 100 and a span twice that magnitude. No supported fixed-width or floating-point rounding is allowed for those examples; unmeasured extreme limits remain unknown.",
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-018",
+        "OBS-026"
+      ]
+    },
+    {
+      "id": "REQ-006",
+      "description": "The CLI reads JSON text from the first command argument. Surrounding JSON whitespace is accepted. Missing, empty or malformed JSON text returns error equal to invalid_json.",
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-028",
+        "OBS-029",
+        "OBS-031",
+        "OBS-036"
+      ]
+    },
+    {
+      "id": "REQ-007",
+      "description": "When more than one command argument is supplied, process only the first and ignore later arguments.",
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-030"
+      ]
+    },
+    {
+      "id": "REQ-008",
+      "description": "Each exercised CLI invocation emits exactly one JSON object followed by a newline, emits no stderr, and exits with status 0, including the defined input error responses. JSON object property order and insignificant serialization whitespace are not compatibility requirements. Test inputs are envelopes containing arguments; expected outputs contain stdout_json, exit_code and stderr.",
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-001",
+        "OBS-006",
+        "OBS-028",
+        "OBS-029",
+        "OBS-030"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "CASE-001",
+      "requirement_ids": [
+        "REQ-003",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[6,2,9]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "count": 3,
+          "span": 7,
+          "total": 17
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-002",
+      "requirement_ids": [
+        "REQ-004",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "count": 0,
+          "span": null,
+          "total": 0
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-002"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-003",
+      "requirement_ids": [
+        "REQ-003",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[4]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "count": 1,
+          "span": 0,
+          "total": 4
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-003"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-004",
+      "requirement_ids": [
+        "REQ-003",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[-3,-8,0]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "count": 3,
+          "span": 8,
+          "total": -11
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-004"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-005",
+      "requirement_ids": [
+        "REQ-003",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[2,2,2]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "count": 3,
+          "span": 0,
+          "total": 6
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-005"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-006",
+      "requirement_ids": [
+        "REQ-002",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[1.5,2.25,-0.5]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "integer_list_required"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-006"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-007",
+      "requirement_ids": [
+        "REQ-001",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "invalid_request"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-007"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-008",
+      "requirement_ids": [
+        "REQ-002",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":null}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "integer_list_required"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-008"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-009",
+      "requirement_ids": [
+        "REQ-002",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":\"132\"}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "integer_list_required"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-009"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-010",
+      "requirement_ids": [
+        "REQ-002",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[1,\"2\"]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "integer_list_required"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-010"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-011",
+      "requirement_ids": [
+        "REQ-002",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[true,false,2]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "integer_list_required"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-011"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-012",
+      "requirement_ids": [
+        "REQ-001",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "[1,2]"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "invalid_request"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-012"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-013",
+      "requirement_ids": [
+        "REQ-002",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[[1],[2]]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "integer_list_required"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-014"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-014",
+      "requirement_ids": [
+        "REQ-002",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":{\"a\":1,\"b\":2}}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "integer_list_required"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-015"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-015",
+      "requirement_ids": [
+        "REQ-003",
+        "REQ-005",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[9007199254740993,1]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "count": 2,
+          "span": 9007199254740992,
+          "total": 9007199254740994
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-018"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-016",
+      "requirement_ids": [
+        "REQ-001",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[3,1,2],\"extra\":999}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "invalid_request"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-020"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-017",
+      "requirement_ids": [
+        "REQ-002",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[null,1]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "integer_list_required"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-022"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-018",
+      "requirement_ids": [
+        "REQ-002",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[1.0]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "integer_list_required"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-023"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-019",
+      "requirement_ids": [
+        "REQ-003",
+        "REQ-005",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\": [10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, -10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000, 7]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "count": 3,
+          "span": 20000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,
+          "total": 7
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-026"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-020",
+      "requirement_ids": [
+        "REQ-006",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "invalid_json"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-028"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-021",
+      "requirement_ids": [
+        "REQ-006",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": []
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "invalid_json"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-029"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-022",
+      "requirement_ids": [
+        "REQ-003",
+        "REQ-007",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[2,8]}",
+          "extra"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "count": 2,
+          "span": 6,
+          "total": 10
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-030"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-023",
+      "requirement_ids": [
+        "REQ-003",
+        "REQ-006",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "  { \"values\" : [8, 3, -4, 8] }  "
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "count": 4,
+          "span": 12,
+          "total": 15
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-031"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-024",
+      "requirement_ids": [
+        "REQ-002",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[1e0]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "integer_list_required"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-033"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-025",
+      "requirement_ids": [
+        "REQ-003",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[-0]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "count": 1,
+          "span": 0,
+          "total": 0
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-035"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-026",
+      "requirement_ids": [
+        "REQ-006",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          ""
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "invalid_json"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-036"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-027",
+      "requirement_ids": [
+        "REQ-002",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":[false]}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "integer_list_required"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-037"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-028",
+      "requirement_ids": [
+        "REQ-001",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "\"values\""
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "invalid_request"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-038"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-029",
+      "requirement_ids": [
+        "REQ-001",
+        "REQ-008"
+      ],
+      "input": {
+        "arguments": [
+          "{\"values\":null,\"extra\":false}"
+        ]
+      },
+      "expected": {
+        "stdout_json": {
+          "error": "invalid_request"
+        },
+        "exit_code": 0,
+        "stderr": ""
+      },
+      "evidence_status": "observed",
+      "evidence_ids": [
+        "OBS-039"
+      ],
+      "fixture_origin": "synthetic"
+    }
+  ],
+  "compatibility_literals": [
+    {
+      "literal": "values",
+      "reason": "The exact public request property is necessary for compatibility.",
+      "evidence_ids": [
+        "OBS-001",
+        "OBS-007"
+      ]
+    },
+    {
+      "literal": "count",
+      "reason": "The exact response property identifies the element count.",
+      "evidence_ids": [
+        "OBS-001"
+      ]
+    },
+    {
+      "literal": "span",
+      "reason": "The exact response property identifies the range width.",
+      "evidence_ids": [
+        "OBS-001",
+        "OBS-002"
+      ]
+    },
+    {
+      "literal": "total",
+      "reason": "The exact response property identifies the integer sum.",
+      "evidence_ids": [
+        "OBS-001"
+      ]
+    },
+    {
+      "literal": "error",
+      "reason": "The exact response property carries input validation failures.",
+      "evidence_ids": [
+        "OBS-006",
+        "OBS-007",
+        "OBS-028"
+      ]
+    },
+    {
+      "literal": "integer_list_required",
+      "reason": "The exact public error value distinguishes invalid arrays and elements.",
+      "evidence_ids": [
+        "OBS-006",
+        "OBS-011"
+      ]
+    },
+    {
+      "literal": "invalid_request",
+      "reason": "The exact public error value distinguishes an invalid request shape.",
+      "evidence_ids": [
+        "OBS-007",
+        "OBS-039"
+      ]
+    },
+    {
+      "literal": "invalid_json",
+      "reason": "The exact public error value distinguishes absent or malformed argument JSON.",
+      "evidence_ids": [
+        "OBS-028",
+        "OBS-029"
+      ]
+    },
+    {
+      "literal": "null",
+      "reason": "JSON null is the public empty-array span value.",
+      "evidence_ids": [
+        "OBS-002"
+      ]
+    },
+    {
+      "literal": "0",
+      "reason": "Zero is the public exit status and empty count/total value.",
+      "evidence_ids": [
+        "OBS-001",
+        "OBS-002",
+        "OBS-028"
+      ]
+    }
+  ],
+  "exclusions": [
+    "GUI, installation, executable packaging, signing and original internal architecture.",
+    "Original source, binaries, private identifiers, original tests and original assets.",
+    "Byte-identical JSON whitespace and object property order."
+  ],
+  "unknowns": [
+    "Original implementation language, version and internal construction were not inspected.",
+    "Native Windows execution is unavailable; portable source and launcher must be verified on a Windows host.",
+    "Limits beyond the exercised integer magnitude 10 to the power 100 and 10000-element array are unknown.",
+    "Duplicate JSON object keys, nonstandard JSON constants, extremely deep JSON and encoding or resource failures are outside the observed contract.",
+    "Persistence, hidden commands, concurrency, external services and undiscovered features are not evidenced."
+  ],
+  "handoff_review": {
+    "status": "approved",
+    "reviewer": "Same analyst/builder context; manual full-content review",
+    "notes": "Read every requirement, complete synthetic input/expected case and compatibility reason. Matched expectations to observed command captures. No reference code, source paths, private structure, original assets/tests or source-shaped algorithms are present. Only necessary public literals are retained. One context saw behavior only; filesystem isolation is not enforced. Review rationale is recorded separately in the analyst area."
+  }
+}

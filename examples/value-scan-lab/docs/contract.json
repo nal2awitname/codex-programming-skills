@@ -1,0 +1,1012 @@
+{
+  "schema_version": 1,
+  "project": {
+    "name": "ValueScanLab",
+    "platform": "Windows; portable CLI on Python 3.10+"
+  },
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "description": "An initial exact-value search returns every aligned location currently equal to the requested integer.",
+      "evidence_status": "public-spec-confirmed",
+      "evidence_ids": [
+        "SPEC-001"
+      ]
+    },
+    {
+      "id": "REQ-002",
+      "description": "A subsequent exact-value search retains only matching locations from the immediately preceding result set; newly matching locations outside that set are not added.",
+      "evidence_status": "public-spec-confirmed",
+      "evidence_ids": [
+        "SPEC-001"
+      ]
+    },
+    {
+      "id": "REQ-003",
+      "description": "Subsequent changed, unchanged, increased and decreased searches compare current values with values retained by the immediately preceding completed scan, using strict inequality for increased/decreased.",
+      "evidence_status": "public-spec-confirmed",
+      "evidence_ids": [
+        "SPEC-002"
+      ]
+    },
+    {
+      "id": "REQ-004",
+      "description": "An initial unknown-value search retains all available four-byte integer locations for later refinement.",
+      "evidence_status": "public-spec-confirmed",
+      "evidence_ids": [
+        "SPEC-001"
+      ]
+    },
+    {
+      "id": "REQ-005",
+      "description": "Use signed 32-bit little-endian integer slots, byte offsets in ascending order, and reject booleans, nonintegers and integers outside the signed 32-bit range. Offsets and strict validation are new lab interface choices.",
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-001",
+        "SPEC-001"
+      ]
+    },
+    {
+      "id": "REQ-006",
+      "description": "A new initial search starts a fresh result set; reset clears scan state. Refinement before any initial scan is an error. Unknown-value mode is available for the initial search only.",
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-002",
+        "SPEC-001"
+      ]
+    },
+    {
+      "id": "REQ-007",
+      "description": "Allocate and scan only a small buffer owned by this application. The demonstration starts with [137,20,137,-3,137,0], changes slot 2 to 120, and narrows the original three matches to byte offset 8. No arbitrary process attachment or reference-program dependency is part of this lab.",
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-003"
+      ]
+    },
+    {
+      "id": "REQ-008",
+      "description": "Provide a Python 3.10+ standard-library CLI: --demo emits the documented demonstration as JSON; --scenario FILE evaluates the neutral scenario interface. Use history entries only for first/next scans; each entry has offsets and their current values. Invalid scenarios return a named error object and a nonzero exit status.",
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-004"
+      ]
+    },
+    {
+      "id": "REQ-009",
+      "description": "Provide an original desktop interface for the owned-buffer demonstration with a search value, scan mode, initial-search button, refine button, lower-sample-value button, restart button and a results table. Lower sample subtracts 17 from slot 2; restart restores the initial fixture and clears results. Keep this lab identity distinct from any reference application.",
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-005"
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "id": "CASE-001",
+      "requirement_ids": [
+        "REQ-001",
+        "REQ-002",
+        "REQ-007",
+        "REQ-008",
+        "REQ-009"
+      ],
+      "input": {
+        "initial": [
+          137,
+          20,
+          137,
+          -3,
+          137,
+          0
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "exact",
+            "value": 137
+          },
+          {
+            "action": "set",
+            "index": 2,
+            "value": 120
+          },
+          {
+            "action": "next",
+            "mode": "exact",
+            "value": 120
+          }
+        ]
+      },
+      "expected": {
+        "history": [
+          {
+            "offsets": [
+              0,
+              8,
+              16
+            ],
+            "values": [
+              137,
+              137,
+              137
+            ]
+          },
+          {
+            "offsets": [
+              8
+            ],
+            "values": [
+              120
+            ]
+          }
+        ]
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-002",
+      "requirement_ids": [
+        "REQ-002"
+      ],
+      "input": {
+        "initial": [
+          11,
+          3,
+          11
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "exact",
+            "value": 11
+          },
+          {
+            "action": "set",
+            "index": 0,
+            "value": 9
+          },
+          {
+            "action": "set",
+            "index": 1,
+            "value": 9
+          },
+          {
+            "action": "next",
+            "mode": "exact",
+            "value": 9
+          }
+        ]
+      },
+      "expected": {
+        "history": [
+          {
+            "offsets": [
+              0,
+              8
+            ],
+            "values": [
+              11,
+              11
+            ]
+          },
+          {
+            "offsets": [
+              0
+            ],
+            "values": [
+              9
+            ]
+          }
+        ]
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-003",
+      "requirement_ids": [
+        "REQ-003",
+        "REQ-004"
+      ],
+      "input": {
+        "initial": [
+          4,
+          4
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "unknown"
+          },
+          {
+            "action": "set",
+            "index": 0,
+            "value": 5
+          },
+          {
+            "action": "next",
+            "mode": "changed"
+          },
+          {
+            "action": "next",
+            "mode": "changed"
+          }
+        ]
+      },
+      "expected": {
+        "history": [
+          {
+            "offsets": [
+              0,
+              4
+            ],
+            "values": [
+              4,
+              4
+            ]
+          },
+          {
+            "offsets": [
+              0
+            ],
+            "values": [
+              5
+            ]
+          },
+          {
+            "offsets": [],
+            "values": []
+          }
+        ]
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-004",
+      "requirement_ids": [
+        "REQ-003"
+      ],
+      "input": {
+        "initial": [
+          4,
+          4,
+          9
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "unknown"
+          },
+          {
+            "action": "set",
+            "index": 1,
+            "value": 5
+          },
+          {
+            "action": "next",
+            "mode": "unchanged"
+          }
+        ]
+      },
+      "expected": {
+        "history": [
+          {
+            "offsets": [
+              0,
+              4,
+              8
+            ],
+            "values": [
+              4,
+              4,
+              9
+            ]
+          },
+          {
+            "offsets": [
+              0,
+              8
+            ],
+            "values": [
+              4,
+              9
+            ]
+          }
+        ]
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-005",
+      "requirement_ids": [
+        "REQ-003"
+      ],
+      "input": {
+        "initial": [
+          -5,
+          0,
+          7
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "unknown"
+          },
+          {
+            "action": "set",
+            "index": 0,
+            "value": -4
+          },
+          {
+            "action": "set",
+            "index": 2,
+            "value": 6
+          },
+          {
+            "action": "next",
+            "mode": "increased"
+          }
+        ]
+      },
+      "expected": {
+        "history": [
+          {
+            "offsets": [
+              0,
+              4,
+              8
+            ],
+            "values": [
+              -5,
+              0,
+              7
+            ]
+          },
+          {
+            "offsets": [
+              0
+            ],
+            "values": [
+              -4
+            ]
+          }
+        ]
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-006",
+      "requirement_ids": [
+        "REQ-003"
+      ],
+      "input": {
+        "initial": [
+          -5,
+          0,
+          7
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "unknown"
+          },
+          {
+            "action": "set",
+            "index": 0,
+            "value": -4
+          },
+          {
+            "action": "set",
+            "index": 2,
+            "value": 6
+          },
+          {
+            "action": "next",
+            "mode": "decreased"
+          }
+        ]
+      },
+      "expected": {
+        "history": [
+          {
+            "offsets": [
+              0,
+              4,
+              8
+            ],
+            "values": [
+              -5,
+              0,
+              7
+            ]
+          },
+          {
+            "offsets": [
+              8
+            ],
+            "values": [
+              6
+            ]
+          }
+        ]
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-007",
+      "requirement_ids": [
+        "REQ-005"
+      ],
+      "input": {
+        "initial": [
+          -2147483648,
+          2147483647,
+          -2147483648
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "exact",
+            "value": -2147483648
+          }
+        ]
+      },
+      "expected": {
+        "history": [
+          {
+            "offsets": [
+              0,
+              8
+            ],
+            "values": [
+              -2147483648,
+              -2147483648
+            ]
+          }
+        ]
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-008",
+      "requirement_ids": [
+        "REQ-004",
+        "REQ-005"
+      ],
+      "input": {
+        "initial": [],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "unknown"
+          },
+          {
+            "action": "next",
+            "mode": "unchanged"
+          }
+        ]
+      },
+      "expected": {
+        "history": [
+          {
+            "offsets": [],
+            "values": []
+          },
+          {
+            "offsets": [],
+            "values": []
+          }
+        ]
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-009",
+      "requirement_ids": [
+        "REQ-006"
+      ],
+      "input": {
+        "initial": [
+          1
+        ],
+        "steps": [
+          {
+            "action": "next",
+            "mode": "exact",
+            "value": 1
+          }
+        ]
+      },
+      "expected": {
+        "error": "scan_not_started"
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-010",
+      "requirement_ids": [
+        "REQ-005"
+      ],
+      "input": {
+        "initial": [
+          true
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "unknown"
+          }
+        ]
+      },
+      "expected": {
+        "error": "invalid_value"
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-011",
+      "requirement_ids": [
+        "REQ-005"
+      ],
+      "input": {
+        "initial": [
+          1.5
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "unknown"
+          }
+        ]
+      },
+      "expected": {
+        "error": "invalid_value"
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-012",
+      "requirement_ids": [
+        "REQ-005"
+      ],
+      "input": {
+        "initial": [
+          2147483648
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "unknown"
+          }
+        ]
+      },
+      "expected": {
+        "error": "invalid_value"
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-013",
+      "requirement_ids": [
+        "REQ-006"
+      ],
+      "input": {
+        "initial": [
+          1
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "changed"
+          }
+        ]
+      },
+      "expected": {
+        "error": "invalid_mode"
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-014",
+      "requirement_ids": [
+        "REQ-006"
+      ],
+      "input": {
+        "initial": [
+          1
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "unknown"
+          },
+          {
+            "action": "next",
+            "mode": "unknown"
+          }
+        ]
+      },
+      "expected": {
+        "error": "invalid_mode"
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-015",
+      "requirement_ids": [
+        "REQ-006"
+      ],
+      "input": {
+        "initial": [
+          1
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "unknown"
+          },
+          {
+            "action": "reset"
+          },
+          {
+            "action": "next",
+            "mode": "unchanged"
+          }
+        ]
+      },
+      "expected": {
+        "error": "scan_not_started"
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-016",
+      "requirement_ids": [
+        "REQ-007"
+      ],
+      "input": {
+        "initial": [
+          1
+        ],
+        "steps": [
+          {
+            "action": "set",
+            "index": -1,
+            "value": 8
+          }
+        ]
+      },
+      "expected": {
+        "error": "invalid_index"
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-017",
+      "requirement_ids": [
+        "REQ-005"
+      ],
+      "input": {
+        "initial": [
+          1
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "exact",
+            "value": true
+          }
+        ]
+      },
+      "expected": {
+        "error": "invalid_value"
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-018",
+      "requirement_ids": [
+        "REQ-006"
+      ],
+      "input": {
+        "initial": [
+          8,
+          3,
+          8
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "exact",
+            "value": 8
+          },
+          {
+            "action": "first",
+            "mode": "exact",
+            "value": 3
+          }
+        ]
+      },
+      "expected": {
+        "history": [
+          {
+            "offsets": [
+              0,
+              8
+            ],
+            "values": [
+              8,
+              8
+            ]
+          },
+          {
+            "offsets": [
+              4
+            ],
+            "values": [
+              3
+            ]
+          }
+        ]
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-019",
+      "requirement_ids": [
+        "REQ-001",
+        "REQ-002"
+      ],
+      "input": {
+        "initial": [
+          2,
+          3
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "exact",
+            "value": 8
+          },
+          {
+            "action": "set",
+            "index": 0,
+            "value": 8
+          },
+          {
+            "action": "next",
+            "mode": "exact",
+            "value": 8
+          }
+        ]
+      },
+      "expected": {
+        "history": [
+          {
+            "offsets": [],
+            "values": []
+          },
+          {
+            "offsets": [],
+            "values": []
+          }
+        ]
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-020",
+      "requirement_ids": [
+        "REQ-005"
+      ],
+      "input": {
+        "initial": [
+          0
+        ],
+        "steps": [
+          {
+            "action": "set",
+            "index": 0,
+            "value": -2147483649
+          }
+        ]
+      },
+      "expected": {
+        "error": "invalid_value"
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-021",
+      "requirement_ids": [
+        "REQ-003"
+      ],
+      "input": {
+        "initial": [
+          8,
+          8
+        ],
+        "steps": [
+          {
+            "action": "first",
+            "mode": "unknown"
+          },
+          {
+            "action": "set",
+            "index": 0,
+            "value": 7
+          },
+          {
+            "action": "next",
+            "mode": "changed"
+          },
+          {
+            "action": "set",
+            "index": 0,
+            "value": 8
+          },
+          {
+            "action": "next",
+            "mode": "increased"
+          }
+        ]
+      },
+      "expected": {
+        "history": [
+          {
+            "offsets": [
+              0,
+              4
+            ],
+            "values": [
+              8,
+              8
+            ]
+          },
+          {
+            "offsets": [
+              0
+            ],
+            "values": [
+              7
+            ]
+          },
+          {
+            "offsets": [
+              0
+            ],
+            "values": [
+              8
+            ]
+          }
+        ]
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    },
+    {
+      "id": "CASE-022",
+      "requirement_ids": [
+        "REQ-005"
+      ],
+      "input": {
+        "initial": [
+          1
+        ],
+        "steps": [
+          {
+            "action": "set",
+            "index": true,
+            "value": 8
+          }
+        ]
+      },
+      "expected": {
+        "error": "invalid_index"
+      },
+      "evidence_status": "proposed",
+      "evidence_ids": [
+        "DESIGN-CASE-001"
+      ],
+      "fixture_origin": "synthetic"
+    }
+  ],
+  "compatibility_literals": [],
+  "exclusions": [
+    "No original implementation, tests, resources or private architecture.",
+    "No reference-program runtime comparison has been performed.",
+    "No arbitrary process memory, driver, code injection, debugger, freezing, pointer scan, game integration or full application clone.",
+    "The desktop layout and lab CLI are new designs, not interface-compatible replacements."
+  ],
+  "unknowns": [
+    "Actual behavior of a particular reference binary/version was not exercised.",
+    "Full reference UI, timing, page filtering, permissions, unsigned values, unaligned addresses and floating-point behavior are outside scope."
+  ],
+  "handoff_review": {
+    "status": "approved",
+    "reviewer": "Analyst; full-content contract review",
+    "notes": "Reviewed all nine requirements, 22 synthetic scenarios and every input/expected value. Only public behavior properties are retained; no original implementation, private identifiers, paths, tests or assets. UI, buffer, CLI and validation conventions are new lab design choices. Cases are proposed acceptance checks; the reference application has not been executed."
+  }
+}

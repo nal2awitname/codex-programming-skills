@@ -1,0 +1,8 @@
+{
+  "initial": [137, 20, 137, -3, 137, 0],
+  "steps": [
+    {"action": "first", "mode": "exact", "value": 137},
+    {"action": "set", "index": 2, "value": 120},
+    {"action": "next", "mode": "exact", "value": 120}
+  ]
+}

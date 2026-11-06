@@ -1,0 +1,42 @@
+name: Value Scan Lab case study
+on:
+  push:
+    paths:
+      - 'examples/value-scan-lab/**'
+      - 'skills/rebuild-windows-from-behavior/**'
+      - 'tests/rebuild-windows-from-behavior/**'
+      - '.github/workflows/value-scan-lab.yml'
+  pull_request:
+    paths:
+      - 'examples/value-scan-lab/**'
+      - 'skills/rebuild-windows-from-behavior/**'
+      - 'tests/rebuild-windows-from-behavior/**'
+      - '.github/workflows/value-scan-lab.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python: ['3.10', '3.12']
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONDONTWRITEBYTECODE: '1'
+      VALUE_SCAN_REQUIRE_GUI: ${{ runner.os == 'Windows' && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Test language triage and handoff tools
+        run: python -m unittest discover -s tests/rebuild-windows-from-behavior -v
+      - name: Test scan contract and desktop controls
+        working-directory: examples/value-scan-lab
+        run: python -m unittest discover -s tests -v
+      - name: Run demonstration
+        working-directory: examples/value-scan-lab
+        run: python scan_lab.py --demo

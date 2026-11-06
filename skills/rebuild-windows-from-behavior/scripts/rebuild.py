@@ -16,8 +16,9 @@ import stat
 import struct
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 SKIP_DIRS = {".git", ".svn", "node_modules", "__pycache__", ".venv", "venv"}
 EVIDENCE = {"observed", "source-confirmed", "public-spec-confirmed", "proposed"}
 MACHINES = {0x14C: "x86", 0x8664: "x64", 0xAA64: "ARM64", 0x1C4: "ARM32"}
@@ -154,6 +155,8 @@ def pe_info(data):
     return result
 
 
+PASCAL_SYNTAX = r"(?im)(?:^\s*(?:unit|program|library)\s+\w+\s*;|\{\$\s*mode\s+(?:objfpc|delphi|fpc)\b)"
+
 SOURCE_HINTS = {
     ".py": ("Python", r"(?m)^\s*(?:from\s+\w+.*import|import\s+\w+|def\s+\w+\(|class\s+\w+)"),
     ".ps1": ("PowerShell", r"(?im)(?:\$[a-z_][\w:]*|\bparam\s*\(|\bfunction\s+[\w-]+)"),
@@ -167,7 +170,31 @@ SOURCE_HINTS = {
     ".java": ("Java", r"\b(?:package\s+\w+|class\s+\w+|import\s+java\.)"),
     ".js": ("JavaScript", r"(?:\b(?:const|let|function|import|export)\s+\w+|=>|require\()"),
     ".ts": ("TypeScript", r"\b(?:interface\s+\w+|type\s+\w+\s*=|import\s+|export\s+)"),
+    ".pas": ("Pascal", PASCAL_SYNTAX),
+    ".pp": ("Pascal", PASCAL_SYNTAX),
+    ".lpr": ("Pascal", PASCAL_SYNTAX),
+    ".dpr": ("Pascal", PASCAL_SYNTAX),
 }
+
+
+def lazarus_language_hints(data, complete):
+    """Infer declared project dialect, without exporting original paths or source."""
+    if not complete:
+        return []
+    try:
+        root = ET.fromstring(data)
+    except (ET.ParseError, ValueError):
+        return []
+    if root.tag != "CONFIG" or root.find("ProjectOptions") is None:
+        return []
+    supported = {"delphi", "delphiunicode", "objfpc", "fpc", "tp", "iso", "macpas", "extendedpascal"}
+    modes = sorted({node.get("Value", "").lower() for node in root.iter("SyntaxMode")} & supported)
+    if not modes:
+        return []
+    language = "Object Pascal" if set(modes) & {"delphi", "delphiunicode", "objfpc"} else "Pascal"
+    return [{"language": language, "status": "inferred",
+             "basis": "Lazarus project declares compiler syntax mode(s): " + ", ".join(modes)
+                      + "; confirm component source and toolchain separately"}]
 
 
 def inspect_file(path, relative, sample_bytes, hash_limit, read_budget):
@@ -189,6 +216,8 @@ def inspect_file(path, relative, sample_bytes, hash_limit, read_budget):
     elif data[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
         result["container"] = "OLE compound signature; MSI is one possible use"
     suffix = path.suffix.lower()
+    if suffix == ".lpi":
+        result["language_evidence"].extend(lazarus_language_hints(data, size == len(data)))
     if suffix in SOURCE_HINTS:
         language, pattern = SOURCE_HINTS[suffix]
         try:
@@ -214,6 +243,8 @@ def inspect_file(path, relative, sample_bytes, hash_limit, read_budget):
         hint = "Java runtime filename; may be an embedded dependency"
     elif lower.endswith(".csproj"):
         hint = "C# project filename; confirm build configuration"
+    elif suffix == ".lpi":
+        hint = "Lazarus project filename; metadata is a component hint, not proof of the whole app language"
     if hint:
         result["runtime_hints"].append({"status": "inferred", "basis": hint})
     return result

@@ -13,6 +13,7 @@
 | --- | --- | --- |
 | JavaScript/TypeScript | Syntax, package metadata, compiler settings, import graph | Browser versus server, build-time types versus runtime values, event loop, promises, bundling |
 | Python | Syntax, project metadata, imports, entry-point declarations | Interpreter, environment, exceptions, generators/async, native extensions |
+| Pascal/Object Pascal | Source syntax, Lazarus `.lpi` metadata, declared FPC/Delphi compiler modes | Units, classes, events, native compilation; a project dialect does not identify every component |
 | C/C++/Rust | Source, build configuration, symbols, binary dependencies | Compilation/linking, ownership and lifetime, ABI/FFI, native resources |
 | C#/Java/Kotlin | Project metadata, managed assembly/bytecode metadata, runtime files | Managed runtime, object model, tasks/threads, packaging, platform APIs |
 | Go | Module/build files, syntax, executable metadata | Compilation, packages, goroutines/channels, resource lifetime |

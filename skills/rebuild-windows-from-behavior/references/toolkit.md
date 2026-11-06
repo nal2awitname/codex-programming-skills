@@ -30,6 +30,11 @@ budget. Adjust with `--max-files`, `--sample-kib`, `--hash-limit-mib`,
 `--total-read-mib`. Skips and truncation remain visible in the report.
 It does not unpack installers, decompile, prove language identity or discover functions.
 
+Version 2.0.1 adds Pascal source indicators (`.pas`, `.pp`, `.lpr`, `.dpr`) and
+bounded Lazarus `.lpi` XML metadata inspection. Recognized compiler modes yield
+language hints, not proof of source language for every component. Invalid,
+truncated or unrelated XML does not become a confirmed language classification.
+
 ## Observation JSON
 
 Create this from a probe actually performed, using synthetic data. Keep it private.

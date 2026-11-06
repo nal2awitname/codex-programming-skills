@@ -101,6 +101,39 @@ class ToolkitAcceptance(unittest.TestCase):
         report = tool.inspect_target(target)
         self.assertEqual(report["files"][0]["language_evidence"][0]["status"], "extension-only")
 
+    def test_pascal_syntax_hints_do_not_export_source(self):
+        source = "unit IndependentExample;\ninterface\nimplementation\nend.\n"
+        for extension in (".pas", ".pp", ".lpr", ".dpr"):
+            target = self.root / ("sample" + extension)
+            target.write_text(source, encoding="utf-8")
+            report = tool.inspect_target(target)
+            hint = report["files"][0]["language_evidence"][0]
+            self.assertEqual(hint["language"], "Pascal")
+            self.assertEqual(hint["status"], "inferred")
+            self.assertNotIn(source, json.dumps(report))
+
+    def test_lazarus_declared_modes_are_component_hints(self):
+        target = self.root / "application.lpi"
+        target.write_text('<CONFIG><ProjectOptions/><CompilerOptions><Parsing>'
+                          '<SyntaxMode Value="Delphi"/></Parsing></CompilerOptions></CONFIG>')
+        result = tool.inspect_target(target)
+        hint = result["files"][0]["language_evidence"][0]
+        self.assertEqual(hint["language"], "Object Pascal")
+        self.assertEqual(hint["status"], "inferred")
+        self.assertIn("delphi", hint["basis"])
+        self.assertIn("component", result["files"][0]["runtime_hints"][0]["basis"])
+
+    def test_invalid_truncated_and_unrelated_lpi_do_not_identify_language(self):
+        contents = ('<CONFIG><ProjectOptions/><SyntaxMode Value="Delphi"/></CONFIG>',
+                    '<CONFIG><ProjectOptions>',
+                    '<Other><SyntaxMode Value="Delphi"/></Other>',
+                    '<CONFIG><ProjectOptions/><SyntaxMode Value="MadeUp"/></CONFIG>')
+        for number, text in enumerate(contents):
+            target = self.root / f"unconfirmed-{number}.lpi"
+            target.write_text(text)
+            result = tool.inspect_target(target, sample_bytes=8) if number == 0 else tool.inspect_target(target)
+            self.assertEqual(result["files"][0]["language_evidence"], [])
+
     def test_native_pe_does_not_claim_cpp(self):
         target = self.root / "native.exe"
         target.write_bytes(synthetic_pe())

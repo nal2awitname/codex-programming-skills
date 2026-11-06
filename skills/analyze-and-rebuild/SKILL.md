@@ -3,9 +3,15 @@ name: analyze-and-rebuild
 description: วิเคราะห์โปรแกรม ระบุภาษา อธิบายโค้ดและการทำงาน แยกส่วนประกอบ แล้วออกแบบและเขียนใหม่จากความเข้าใจโดยห้ามคัดลอกโค้ดต้นฉบับ. Use for understanding source code, repositories, scripts, applications, executables, bundles, APKs, or firmware; explaining architecture and runtime behavior; and independently reimplementing or porting software from an evidence-based behavioral specification. Trigger on requests to reverse engineer, dissect a program, explain how it was built, or recreate functionality without copying original code.
 ---
 
-# Analyze and rebuild from understanding
+# Analyze and rebuild from understanding — version 2.0
 
 Understand the program, explain it clearly, and implement requested behavior independently. Respond in the user's language; default to concise Thai with concrete evidence. Read [references/analysis-guide.md](references/analysis-guide.md) for artifact-specific analysis, [references/behavior-spec.md](references/behavior-spec.md) before a rebuild, [references/verification.md](references/verification.md) before claiming equivalence or independence, and [references/github-handoff.md](references/github-handoff.md) when preparing components for continued development or GitHub delivery.
+
+## 0. Use the working evidence tools
+
+Read [references/toolkit-guide.md](references/toolkit-guide.md) for the runnable v2 workbench, JSON schemas, commands and limits. Resolve `SKILL_DIR` to this directory. Use Python 3.10+ and standard libraries, or the included PowerShell wrapper. Run `python SKILL_DIR/scripts/arb.py init --source ORIGINAL --work LAB` with separate original and work directories. Inventorying never executes the original. The scripts do not supply an AI model, understand semantics automatically, or generate a replacement by themselves; perform the actual analysis and independent implementation with the available agent/developer tools.
+
+Use the inventory and ledger throughout the task. Keep all original-facing material in `LAB/analyst/`. Explain the actual supported parser/runtime scope: Python AST, native PowerShell AST when available, incomplete JS/TS hints, and manual/tool-assisted discovery for other source languages or shipped binaries. Do not describe hints, an EXE signature, or a passed schema check as complete program understanding.
 
 ## Non-negotiable original-code boundary
 
@@ -37,6 +43,8 @@ Understand the program, explain it clearly, and implement requested behavior ind
 3. Explain algorithms at the level needed for understanding: purpose, invariants, inputs, output properties, and complexity where supported. Do not transcribe an original algorithm into line-by-line pseudocode.
 4. Maintain evidence labels: **observed** (executed or measured), **source-confirmed** (statically inspected), **inferred** (reasoned with stated support), **unknown** (unavailable). Cite original file paths/lines or observation IDs in the analysis report. Do not invent confidence percentages.
 5. Prefer compact tables; use a focused Mermaid diagram only when relationships or state transitions need it. Keep source-facing analysis separate from builder-facing artifacts.
+6. Account for every discovered unit and every file in `analyst/ledger.json`; explicitly justify exclusions. Manually inventory public features, runtime-created functions, UI actions, APIs, file formats, storage, plugins and external boundaries in `features` and `feature_discovery`. Read and trace actual behavior before marking any entry understood. Bind explanations to source-confirmed or observed evidence and to neutral requirements/cases. Do not silently delete uncovered rows or mark unsupported/binary internals complete.
+7. Interpret “all functions” as a concrete scope and an evidence ledger. Report undiscovered dynamic behavior, inaccessible services and untested branches as gaps. A count of static definitions or a gate passing does not establish exhaustive coverage of the original.
 
 ## 4. Derive an implementation-neutral contract
 
@@ -45,12 +53,13 @@ Understand the program, explain it clearly, and implement requested behavior ind
 3. Exclude original code, decompiler output, original file paths/line references, private identifiers, implementation-specific constants, private call graphs, algorithms transcribed from source, and proposed code that mirrors original structure. Keep detailed provenance in the separate analysis report; use neutral requirement and observation IDs in the contract.
 4. Retain only compatibility facts essential to the public boundary and document why each exact literal is necessary. Explain standard algorithms in terms of requirements; consult primary specifications/documentation when needed rather than sourcing implementation from the target.
 5. Audit the contract before handoff. Remove details that tell a builder how the original was implemented instead of what an independent implementation must accomplish. Do not forward the analysis report or original artifacts to a builder.
+6. Fill the workbench's `contract.json` and independently authored `cases.json` with supported behavior and expected interface results. Record source evidence with `evidence`; use `observe` only when execution of that reference command is authorized in the appropriate environment. Run `check`, resolve blockers, then `seal --reviewed` after the analyst's actual no-code audit. Export a new builder-input directory with `handoff`. The review flag records completed work by the analyst, not extra permission from the user.
 
 ## 5. Design and implement independently
 
 1. Choose a suitable architecture, data model, language, dependencies, and algorithms from the contract and user's constraints. Explain important choices. Use a distinct design when it serves the requirements; do not mechanically mirror private source structure. Ordinary syntax and standard algorithms need not be artificially distorted.
-2. When an isolated agent/context is available and rebuilding is authorized, give a fresh builder only this skill, the audited contract, clean synthetic fixtures, and a new output directory. Exclude inherited conversation/source analysis, original artifact paths, and original access. Instruct the builder not to seek the original. Share the source-facing report only after implementation is complete, if needed for the user.
-3. Treat separate conversations on a shared filesystem as context separation only unless original access is actually prevented. Record context inheritance and filesystem access honestly; do not call an arrangement an enforced clean room without access controls. If a fresh context is unavailable, implement from the contract and disclose that the same context previously inspected the original.
+2. For the strict no-copy workflow, give a fresh builder only this skill, the exported audited input package, clean synthetic fixtures, and a new output directory. Do not inherit the original-facing conversation. Exclude the source report, original artifact paths, and original access. Instruct the builder not to seek the original. Share a suitable source-facing report with the user only after implementation is complete.
+3. Treat separate conversations on a shared filesystem as context separation only unless original access is actually prevented. Record context inheritance and filesystem access honestly; do not call an arrangement an enforced clean room without access controls. If a fresh builder context is unavailable, finish the audited handoff and provide the exact next-session input; do not secretly weaken the strict separation or claim the replacement is complete.
 4. Build complete runnable code for the agreed scope, with reproducible local build/run instructions and appropriate dependency declarations. Keep the original outside the new dependency, build, and packaging paths.
 5. Explain how each new component satisfies a requirement and why the new design works. Do not claim that the result reconstructs the author's original source or hidden history.
 
@@ -61,6 +70,7 @@ Understand the program, explain it clearly, and implement requested behavior ind
 3. Check source/dependency provenance and accidental original-code inclusion. If an overlap tool is available, use it only as supporting evidence; review findings contextually and never report a similarity score as proof of independence.
 4. Fix deviations in the new implementation. Correct the contract only when new evidence supports a behavioral correction, documenting the change; do not change tests simply to match the new code. When separated, route reference-side findings back to the builder as contract updates, not source excerpts.
 5. Lead the final response with the usable outcome. Summarize language/runtime, major components, how behavior works, new implementation choices, verification, and material gaps. Link deliverables when created. Never present an outline, mock, or unexecuted build as a completed working program.
+6. Run the workbench's `verify` against the independently built command for text/JSON CLI cases. Keep original observation capture on the analyst side. Use appropriate real adapters for GUI, services or binary protocols instead of pretending a CLI comparison tests those surfaces. Treat changed source, contract, cases, command or rebuilt files as stale evidence. Report actual passing/failing cases and the oracle type; expectation-only checks are not measured equivalence to the original.
 
 ## 7. Organize components and deliver to GitHub
 

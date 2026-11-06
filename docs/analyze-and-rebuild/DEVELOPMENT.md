@@ -1,5 +1,7 @@
 # พัฒนา analyze-and-rebuild ต่อ
 
+รุ่น 2.0 มีโค้ดเครื่องมือและชุดทดสอบที่รันได้ ดู [ส่วนประกอบและคำสั่ง](V2_TH.md) และ [operator guide](../../skills/analyze-and-rebuild/references/toolkit-guide.md)
+
 ## เริ่มแก้ไข
 
 ```bash

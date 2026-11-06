@@ -18,6 +18,8 @@
 c24796ad9fe73b97caba1a0175957f02ed66ab7925d21e9818ce442762a4c58a
 ```
 
+กำหนด `docs/contract.json text eol=lf` ใน `.gitattributes` เพื่อให้ checkout บน Windows ที่เปิด `core.autocrlf` ยังคง byte hash เดิม การตรวจ hash ไม่ได้ถูกลดความเข้มงวด
+
 Contract ระบุ 9 requirements และ 22 synthetic acceptance cases โดย cases เป็น **proposed** acceptance expectations ไม่ใช่ผลรันโปรแกรมอ้างอิง `compatibility_literals` ของ contract ว่าง ชื่อ JSON actions/modes/errors, fixture และ signed 32-bit/offset conventions คงไว้เพราะเป็น interface ของ lab ฉบับใหม่นี้ ไม่มีข้ออ้างว่าตรง interface ของโปรแกรมอ้างอิง
 
 Runtime ใช้ Python 3.10+ standard library เท่านั้น ไม่มี third-party package, original assets หรือ binary ที่ bundle เพิ่ม GUI ต้องมี Tkinter/Tcl/Tk และ desktop จริง Imports ตรวจจาก AST ของไฟล์ใหม่แล้ว: runtime ใช้ `argparse`, `ctypes`, `json`, `pathlib`, `sys`, `tkinter` และ modules ภายในโปรเจกต์; tests เพิ่ม `copy`, `hashlib`, `os`, `subprocess`, `tempfile`, `unittest` และ test module ภายใน ไม่มี symlinks ในไฟล์ Python ที่ตรวจ

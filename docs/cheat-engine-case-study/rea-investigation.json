@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "record_type": "investigation-plan",
+  "checked_date": "2026-11-06",
+  "guidance": {
+    "repository": "https://github.com/nal2awitname/rea",
+    "commit": "d3ab0faf52a02ff5a618f3ed7beb608b78752abd",
+    "source_manifest_version": "6.8.0",
+    "installed_rea_version": null
+  },
+  "original_target": {
+    "name": "Cheat Engine",
+    "binary_path": null,
+    "binary_version": null,
+    "binary_sha256": null,
+    "binary_format_verified": false,
+    "original_execution_performed": false,
+    "reference_captures": []
+  },
+  "executor_snapshot": {
+    "os": "Linux",
+    "node_version": "24.22.1",
+    "rea_mcp_tools_discovered": [],
+    "rea_cli_on_path": false,
+    "rea_native_provider_readiness": "not_established",
+    "scope": "Executor only; no inspection of the user computer",
+    "observed_date": "2026-11-10"
+  },
+  "existing_evidence": [
+    {
+      "id": "DOC-SCAN",
+      "kind": "public-documentation",
+      "source": "https://wiki.cheatengine.org/index.php?title=Cheat_Engine:Memory_Scanning",
+      "supports": "Documented scan concepts; not reference execution"
+    },
+    {
+      "id": "META-PROJECT",
+      "kind": "project-metadata",
+      "source": "https://github.com/cheat-engine/cheat-engine/blob/ec45d5f47f92a239ba0bf51ec5d04a7509c3fd37/Cheat%20Engine/cheatengine.lpi",
+      "git_blob_sha1": "4774028a79f1fc87ca0cc51dec13490c41af0eac",
+      "supports": "Declared Delphi mode and Pascal unit entries; not identity of a selected executable"
+    },
+    {
+      "id": "CANDIDATE-CI",
+      "kind": "candidate-tests",
+      "source": "https://github.com/nal2awitname/codex-programming-skills/actions/runs/42174748002",
+      "program": "ValueScanLab",
+      "synthetic_acceptance_cases": 22,
+      "supports": "The independently written owned-buffer example and its Windows GUI smoke; not Cheat Engine behavior"
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-01",
+      "question": "Which exact executable/build is selected?",
+      "status": "unresolved",
+      "evidence_ids": [],
+      "needed": "Supplied artifact, version if evidenced, full-byte digest and architecture"
+    },
+    {
+      "id": "Q-02",
+      "question": "Which language/toolchain facts apply to that executable?",
+      "status": "partial",
+      "evidence_ids": [
+        "META-PROJECT"
+      ],
+      "needed": "Corroborate component metadata against the selected artifact; do not infer all component languages from a project mode"
+    },
+    {
+      "id": "Q-03",
+      "question": "What does original First Scan return for bounded synthetic int32 data?",
+      "status": "unresolved",
+      "evidence_ids": [
+        "DOC-SCAN"
+      ],
+      "needed": "Actual reference actions, scan options, range/alignment, results, inputs and environment"
+    },
+    {
+      "id": "Q-04",
+      "question": "Which candidates and baseline does original Next Scan retain across repeated changes?",
+      "status": "unresolved",
+      "evidence_ids": [
+        "DOC-SCAN"
+      ],
+      "needed": "Reference captures across initial/refine/reset steps with known changed and unchanged slots"
+    },
+    {
+      "id": "Q-05",
+      "question": "What errors, cancellation and side effects occur in the selected scope?",
+      "status": "unresolved",
+      "evidence_ids": [],
+      "needed": "Actual reference failure/cancellation/termination observations and cleanup outcome"
+    },
+    {
+      "id": "Q-06",
+      "question": "Does ValueScanLab satisfy its own declared example contract?",
+      "status": "answered",
+      "evidence_ids": [
+        "CANDIDATE-CI"
+      ],
+      "needed": null,
+      "scope": "Only the finite lab scenarios and candidate-side GUI checks from the linked prior run"
+    },
+    {
+      "id": "Q-07",
+      "question": "Does the candidate match the selected original for the agreed cases?",
+      "status": "unresolved",
+      "evidence_ids": [
+        "CANDIDATE-CI"
+      ],
+      "needed": "Compatible separately captured original and candidate results; candidate tests alone cannot close this question"
+    }
+  ],
+  "planned_routes_if_advertised": [
+    {
+      "material": "Installation directory with unknown runtime",
+      "operations": [
+        "inspect_desktop_application"
+      ],
+      "effect": "static metadata; no application execution"
+    },
+    {
+      "material": "Verified PE and focused metadata question",
+      "operations": [
+        "inspect_pe_imports",
+        "inspect_pe_resources",
+        "inspect_native_exports"
+      ],
+      "effect": "static original-file facts; no runtime claim"
+    },
+    {
+      "material": "Verified native executable and focused code question",
+      "operations": [
+        "open_binary",
+        "analyze_function",
+        "inspect_analysis_view"
+      ],
+      "effect": "Provider analysis; original pseudocode/private details remain analyst-only"
+    }
+  ],
+  "runtime_host_constraints": {
+    "native_ui_in_pinned_rea_guide": "macOS 14+",
+    "new_process_capture_in_pinned_rea_guide": "Linux/macOS",
+    "windows_reference_observation": "Requires an actually available suitable Windows adapter or recorded manual observation with its real producer",
+    "frida_windows_qualification": "Not established by Linux verification or this plan",
+    "static_value_trace": "Not live process execution"
+  },
+  "next_actions": [
+    "Obtain the selected original artifact and bind its byte identity.",
+    "Use actual advertised REA schemas or an existing compatible CLI; resolve only observed readiness blockers.",
+    "Answer focused static questions with bounded inventory and retained evidence.",
+    "Capture the agreed original Windows int32 scenarios with synthetic inputs and declared actions, effects and stop conditions.",
+    "Audit an implementation-neutral contract and clean fixtures; keep decompilation, private identifiers and source structure out of builder input.",
+    "Refine the independent candidate and compare finite compatible reference/candidate captures, preserving unresolved gaps."
+  ],
+  "claims": {
+    "rea_operation_executed": false,
+    "original_runtime_verified": false,
+    "original_binary_analyzed": false,
+    "reference_candidate_equivalence_verified": false,
+    "full_function_coverage_verified": false
+  },
+  "implementation_boundary": {
+    "original_code_permitted_in_new_program": false,
+    "recovered_source_permitted_in_builder_handoff": false,
+    "exact_public_facts": "Retain only necessary compatibility facts with reasons and provenance",
+    "builder_access_control": "Shared filesystem separation is not enforced clean-room isolation"
+  },
+  "consumer_note": "This is the project investigation record. Use the installed operation schema or CLI help when forming actual REA requests.",
+  "last_review_date": "2026-11-10"
+}

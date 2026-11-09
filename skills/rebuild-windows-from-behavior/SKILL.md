@@ -7,6 +7,17 @@ description: วิเคราะห์พฤติกรรม ภาษา �
 
 Understand the program, explain it clearly, and implement requested behavior independently. Respond in the user's language; default to concise Thai with concrete evidence. Read [references/analysis-guide.md](references/analysis-guide.md) for artifact-specific analysis, [references/behavior-spec.md](references/behavior-spec.md) before a rebuild, [references/verification.md](references/verification.md) before claiming equivalence or independence, and [references/github-handoff.md](references/github-handoff.md) when preparing components for continued development or GitHub delivery.
 
+## REA investigation discipline
+
+For shipped artifacts or questions about original runtime behavior, read
+[references/rea-investigation.md](references/rea-investigation.md) before selecting
+analysis tools. Resolve the actual target, advertised capabilities, evidence scope
+and unanswered questions first. Apply REA's investigation approach while preserving
+the stricter no-copy boundary below. Original decompiler output stays analyst-only.
+Treat documentation-based examples and tests of a new implementation as separate
+evidence from execution of the original. Never substitute a nearby demo for the
+selected target or invent REA calls, Evidence IDs, runtime captures or readiness.
+
 ## Windows-first runnable workflow
 
 Read [references/windows-workflow.md](references/windows-workflow.md) for Windows

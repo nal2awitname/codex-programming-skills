@@ -21,6 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Pester (cross-platform logic)
+        timeout-minutes: 10
         run: |
           Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser -SkipPublisherCheck
           Import-Module Pester -MinimumVersion 5.5
@@ -59,6 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Pester (Windows, including real-system tests)
+        timeout-minutes: 15
         run: |
           Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser -SkipPublisherCheck
           Import-Module Pester -MinimumVersion 5.5
@@ -66,6 +68,7 @@ jobs:
           $c.Run.Path = 'tests'; $c.Run.Exit = $true; $c.Output.Verbosity = 'Detailed'
           Invoke-Pester -Configuration $c
       - name: SelfTest — WPF window, controls and catalog
+        timeout-minutes: 5
         run: |
           $exe = if ($PSVersionTable.PSEdition -eq 'Desktop') { 'powershell.exe' } else { 'pwsh.exe' }
           & $exe -NoProfile -STA -ExecutionPolicy Bypass -File scripts/DriverRuntimeManager.ps1 -Mode SelfTest

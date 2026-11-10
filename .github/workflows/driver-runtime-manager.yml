@@ -1,0 +1,107 @@
+name: Driver & Runtime Manager
+on:
+  push:
+    paths:
+      - 'skills/windows-driver-runtime-manager/**'
+      - '.github/workflows/driver-runtime-manager.yml'
+  pull_request:
+    paths:
+      - 'skills/windows-driver-runtime-manager/**'
+      - '.github/workflows/driver-runtime-manager.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  logic-and-links:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: skills/windows-driver-runtime-manager
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pester (cross-platform logic)
+        run: |
+          Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser -SkipPublisherCheck
+          Import-Module Pester -MinimumVersion 5.5
+          $c = New-PesterConfiguration
+          $c.Run.Path = 'tests'; $c.Run.Exit = $true; $c.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $c
+      - name: Official Microsoft download links resolve
+        run: |
+          $cat = Get-Content scripts/catalog.json -Raw -Encoding UTF8 | ConvertFrom-Json
+          $urls = $cat.items | ForEach-Object { $_.install } | Where-Object { $_.type -eq 'direct' } | ForEach-Object { $_.url } | Sort-Object -Unique
+          $bad = 0
+          foreach ($u in $urls) {
+            try { $r = Invoke-WebRequest -Uri $u -Method Head -MaximumRedirection 10 -UseBasicParsing -TimeoutSec 60; Write-Host ("{0} {1}" -f $r.StatusCode, $u) }
+            catch { $bad++; Write-Host ("FAIL {0}: {1}" -f $u, $_.Exception.Message) }
+          }
+          Import-Module ./scripts/DriverRuntimeManager.psm1 -Force
+          foreach ($ch in (Get-DrmDotnetChannels -Catalog $cat)) {
+            foreach ($a in 'x64', 'x86') {
+              $u = $cat.dotnet.downloadUrlTemplate.Replace('{version}', $ch.Latest).Replace('{arch}', $a)
+              try { $r = Invoke-WebRequest -Uri $u -Method Head -UseBasicParsing -TimeoutSec 60; Write-Host ("{0} {1}" -f $r.StatusCode, $u) }
+              catch { $bad++; Write-Host ("FAIL {0}: {1}" -f $u, $_.Exception.Message) }
+            }
+          }
+          if ($bad) { throw "$bad link(s) failed" }
+
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+        working-directory: skills/windows-driver-runtime-manager
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pester (Windows, including real-system tests)
+        run: |
+          Install-Module Pester -MinimumVersion 5.5 -Force -Scope CurrentUser -SkipPublisherCheck
+          Import-Module Pester -MinimumVersion 5.5
+          $c = New-PesterConfiguration
+          $c.Run.Path = 'tests'; $c.Run.Exit = $true; $c.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $c
+      - name: SelfTest — WPF window, controls and catalog
+        run: |
+          $exe = if ($PSVersionTable.PSEdition -eq 'Desktop') { 'powershell.exe' } else { 'pwsh.exe' }
+          & $exe -NoProfile -STA -ExecutionPolicy Bypass -File scripts/DriverRuntimeManager.ps1 -Mode SelfTest
+          if ($LASTEXITCODE -ne 0) { throw "SelfTest failed ($LASTEXITCODE)" }
+      - name: Detailed system scan with update check (manufacturer, then Windows Update)
+        timeout-minutes: 25
+        run: |
+          $exe = if ($PSVersionTable.PSEdition -eq 'Desktop') { 'powershell.exe' } else { 'pwsh.exe' }
+          & $exe -NoProfile -ExecutionPolicy Bypass -File scripts/DriverRuntimeManager.ps1 -Mode Scan -CheckUpdates -NoElevate -Root "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\scan"
+          if ($LASTEXITCODE -ne 0) { throw "Scan failed ($LASTEXITCODE)" }
+          if (-not (Get-ChildItem "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\scan\Reports" -Filter *.html)) { throw 'No HTML report' }
+      - name: Dry run of every item in the correct order
+        timeout-minutes: 25
+        run: |
+          $exe = if ($PSVersionTable.PSEdition -eq 'Desktop') { 'powershell.exe' } else { 'pwsh.exe' }
+          & $exe -NoProfile -ExecutionPolicy Bypass -File scripts/DriverRuntimeManager.ps1 -Mode Install -Preset all -IncludeOem -IncludeWindowsUpdateDrivers -DryRun -NoElevate -Root "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\dry"
+          if ($LASTEXITCODE -ne 0) { throw "Dry run reported failures ($LASTEXITCODE)" }
+      - name: Real install — download from Microsoft, verify signature, update only when newer
+        if: matrix.shell == 'powershell'
+        timeout-minutes: 30
+        run: |
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/DriverRuntimeManager.ps1 -Mode Install -Preset none -Items 'vc14-x64,vc14-x86,vc2013-x64,vc2010-x64,directx-jun2010,webview2,dotnet-desktop-10.0-x64' -NoRestorePoint -NoElevate -Root "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\real"
+          $code = $LASTEXITCODE
+          $json = Get-ChildItem "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\real\Reports" -Filter *.json | Sort-Object LastWriteTime | Select-Object -Last 1
+          $report = Get-Content $json.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+          $report.Results | Format-Table Name, Status, Method, ExitCode, Detail -AutoSize -Wrap | Out-String -Width 250 | Write-Host
+          if ($code -ne 0) { throw "Real install reported failures ($code)" }
+          $again = & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Import-Module ./scripts/DriverRuntimeManager.psm1; `$c = Get-DrmCatalog -Path ./scripts/catalog.json; (Get-DrmRuntimeItems -Catalog `$c -Offline | Where-Object { `$_.Id -in 'vc14-x64','vc14-x86','directx-jun2010','dotnet-desktop-10.0-x64' -and -not `$_.Installed }).Count"
+          if ([int]($again | Select-Object -Last 1) -ne 0) { throw 'Runtimes not detected after install' }
+      - name: Upload logs and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drm-${{ matrix.shell }}-reports
+          path: |
+            ${{ runner.temp }}\drm-${{ matrix.shell }}\**\*.log
+            ${{ runner.temp }}\drm-${{ matrix.shell }}\**\*.html
+            ${{ runner.temp }}\drm-${{ matrix.shell }}\**\*.json
+          if-no-files-found: warn

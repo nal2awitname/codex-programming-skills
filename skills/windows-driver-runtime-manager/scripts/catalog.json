@@ -1,0 +1,750 @@
+{
+  "schemaVersion": 1,
+  "catalogDate": "2026-11-10",
+  "description": "แคตตาล็อกรันไทม์ โปรแกรมเสริม เครื่องมือผู้ผลิต และข้อมูลวงจรชีวิต Windows สำหรับ Driver & Runtime Manager แก้ไขได้โดยไม่ต้องแก้โค้ด",
+  "sources": {
+    "vcRedist": "https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist",
+    "dotnetReleaseIndex": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json",
+    "windowsLifecycle": "https://learn.microsoft.com/windows/release-health/supported-versions-windows-client",
+    "driverSignatureEku": "https://learn.microsoft.com/windows-hardware/drivers/dashboard/code-signing-validate",
+    "wingetIndex": "https://cdn.winget.microsoft.com/cache/source.msix",
+    "dellInstallOrder": "https://www.dell.com/support/kbdoc/000132394"
+  },
+  "trustedRuntimeHosts": [
+    "aka.ms",
+    "go.microsoft.com",
+    "download.microsoft.com",
+    "builds.dotnet.microsoft.com",
+    "dotnetcli.azureedge.net"
+  ],
+  "dotnet": {
+    "releaseIndexUrl": "https://builds.dotnet.microsoft.com/dotnet/release-metadata/releases-index.json",
+    "downloadUrlTemplate": "https://builds.dotnet.microsoft.com/dotnet/WindowsDesktop/{version}/windowsdesktop-runtime-{version}-win-{arch}.exe",
+    "minimumMajor": 6,
+    "maxEolChannels": 2,
+    "fallbackChannels": [
+      { "channel": "10.0", "supportPhase": "active", "releaseType": "lts" },
+      { "channel": "8.0", "supportPhase": "eol", "releaseType": "lts" }
+    ]
+  },
+  "windowsLifecycle": [
+    { "family": "Windows 11", "version": "26H1", "build": 28000, "homePro": "2028-03-14", "enterprise": "2029-03-13" },
+    { "family": "Windows 11", "version": "26H2", "build": 26300, "homePro": "2028-10-10", "enterprise": "2029-10-09" },
+    { "family": "Windows 11", "version": "25H2", "build": 26200, "homePro": "2027-10-12", "enterprise": "2028-10-10" },
+    { "family": "Windows 11", "version": "24H2", "build": 26100, "homePro": "2026-10-13", "enterprise": "2027-10-12", "ltsc": "2029-10-09" },
+    { "family": "Windows 11", "version": "23H2", "build": 22631, "homePro": "2025-11-11", "enterprise": "2026-11-10" },
+    { "family": "Windows 11", "version": "22H2", "build": 22621, "homePro": "2024-10-08", "enterprise": "2025-10-14" },
+    { "family": "Windows 11", "version": "21H2", "build": 22000, "homePro": "2023-10-10", "enterprise": "2024-10-08" },
+    { "family": "Windows 10", "version": "22H2", "build": 19045, "homePro": "2025-10-14", "enterprise": "2025-10-14" },
+    { "family": "Windows 10", "version": "21H2 / LTSC 2021", "build": 19044, "homePro": "2023-06-13", "enterprise": "2024-06-11", "ltsc": "2027-01-12" },
+    { "family": "Windows 10", "version": "1809 / LTSC 2019", "build": 17763, "homePro": "2020-11-10", "enterprise": "2021-05-11", "ltsc": "2029-01-09" }
+  ],
+  "vendorIds": {
+    "8086": "Intel", "8087": "Intel", "10DE": "NVIDIA", "1002": "AMD", "1022": "AMD",
+    "10EC": "Realtek", "0BDA": "Realtek", "14E4": "Broadcom", "0A5C": "Broadcom",
+    "168C": "Qualcomm Atheros", "17CB": "Qualcomm", "0CF3": "Qualcomm Atheros", "14C3": "MediaTek", "0E8D": "MediaTek",
+    "1B21": "ASMedia", "144D": "Samsung", "15B7": "SanDisk / WD", "1C5C": "SK hynix", "1987": "Phison",
+    "2646": "Kingston", "126F": "Silicon Motion", "1179": "KIOXIA / Toshiba", "1E0F": "KIOXIA", "1D6A": "Marvell / Aquantia",
+    "06CB": "Synaptics", "04F3": "ELAN", "27C6": "Goodix", "138A": "Synaptics (Validity)", "13D3": "IMC Networks",
+    "0C45": "Microdia", "5986": "Bison", "1532": "Razer", "046D": "Logitech", "045E": "Microsoft", "1414": "Microsoft",
+    "15AD": "VMware", "80EE": "VirtualBox", "1AF4": "Red Hat VirtIO", "1217": "O2 Micro", "1180": "Ricoh", "10B5": "PLX", "1912": "Renesas"
+  },
+  "oemTools": [
+    {
+      "vendor": "Dell",
+      "match": "^(Dell|Alienware)",
+      "modelExclude": "Alienware",
+      "name": "Dell Command | Update",
+      "winget": "Dell.CommandUpdate",
+      "automated": true,
+      "exe": [
+        "%ProgramFiles%\\Dell\\CommandUpdate\\dcu-cli.exe",
+        "%ProgramFiles(x86)%\\Dell\\CommandUpdate\\dcu-cli.exe"
+      ],
+      "scanArgs": "/scan -silent -report=\"{ReportDir}\" -outputLog=\"{LogFile}\"",
+      "applyArgs": "/applyUpdates -silent -reboot=disable -autoSuspendBitLocker=enable -outputLog=\"{LogFile}\"",
+      "report": "dell",
+      "successCodes": [0, 1, 5, 500],
+      "rebootCodes": [1, 5],
+      "noUpdateCodes": [500],
+      "supportUrl": "https://www.dell.com/support/home/",
+      "note": "ติดตั้ง BIOS ชิปเซ็ต และไดรเวอร์ทั้งหมดตามลำดับที่ Dell กำหนดให้อัตโนมัติ (ระงับ BitLocker ระหว่างอัปเดต BIOS)"
+    },
+    {
+      "vendor": "Dell",
+      "match": "^(Dell|Alienware)",
+      "name": "Alienware / Dell SupportAssist",
+      "automated": false,
+      "supportUrl": "https://www.dell.com/support/home/",
+      "note": "เครื่องตระกูล Alienware ใช้ SupportAssist หรือ Alienware Update — เปิดหน้า Dell Support เพื่อตรวจด้วยรหัส Service Tag"
+    },
+    {
+      "vendor": "Lenovo",
+      "match": "^LENOVO",
+      "modelMatch": "Think(Pad|Centre|Station)",
+      "name": "Lenovo System Update",
+      "winget": "Lenovo.SystemUpdate",
+      "automated": true,
+      "exe": [
+        "%ProgramFiles(x86)%\\Lenovo\\System Update\\tvsu.exe",
+        "%ProgramFiles%\\Lenovo\\System Update\\tvsu.exe"
+      ],
+      "applyArgs": "/CM -search A -action INSTALL -noicon -includerebootpackages 1,3,4 -noreboot",
+      "waitProcess": ["Tvsukernel", "tvsu"],
+      "successCodes": [0],
+      "rebootCodes": [],
+      "noUpdateCodes": [],
+      "supportUrl": "https://pcsupport.lenovo.com/",
+      "note": "ใช้กับ ThinkPad/ThinkCentre/ThinkStation ติดตั้งอัปเดต Critical/Recommended/Optional รวมแพ็กเกจที่ต้องรีสตาร์ท โดยไม่รีสตาร์ทเอง (ผลละเอียดอยู่ใน log ของ System Update)"
+    },
+    {
+      "vendor": "Lenovo",
+      "match": "^LENOVO",
+      "name": "Lenovo Vantage",
+      "automated": false,
+      "supportUrl": "https://pcsupport.lenovo.com/",
+      "note": "เครื่อง IdeaPad/Legion/Yoga/ThinkBook ใช้ Lenovo Vantage (Microsoft Store) หรือหน้าดาวน์โหลดของ Lenovo"
+    },
+    {
+      "vendor": "HP",
+      "match": "^(HP|Hewlett)",
+      "modelMatch": "Pavilion|ENVY|Envy|OMEN|Omen|Victus|Spectre|Stream|HP Laptop|All-in-One|Chromebook",
+      "name": "HP Support Assistant",
+      "winget": "HP.SupportAssistant",
+      "automated": false,
+      "launch": [
+        "%ProgramFiles(x86)%\\Hewlett-Packard\\HP Support Framework\\HPSF.exe",
+        "%ProgramFiles%\\HP\\HP Support Assistant\\HPSupportAssistant.exe"
+      ],
+      "supportUrl": "https://support.hp.com/drivers",
+      "note": "เครื่อง HP ผู้ใช้ทั่วไป (Pavilion/ENVY/OMEN/Victus/Spectre) ใช้ HP Support Assistant ซึ่งต้องกดยืนยันในหน้าต่างของ HP"
+    },
+    {
+      "vendor": "HP",
+      "match": "^(HP|Hewlett)",
+      "name": "HP Image Assistant",
+      "winget": "HP.ImageAssistant",
+      "automated": true,
+      "exe": [
+        "%SystemDrive%\\SWSetup\\HPImageAssistant\\HPImageAssistant.exe",
+        "%ProgramFiles%\\HP\\HPIA\\HPImageAssistant.exe",
+        "%ProgramFiles%\\HP\\HP Image Assistant\\HPImageAssistant.exe"
+      ],
+      "exeName": "HPImageAssistant.exe",
+      "scanArgs": "/Operation:Analyze /Category:BIOS,Drivers,Firmware /Selection:All /Action:List /Silent /ReportFolder:\"{ReportDir}\"",
+      "applyArgs": "/Operation:Analyze /Category:BIOS,Drivers,Firmware /Selection:All /Action:Install /Silent /AutoCleanup /ReportFolder:\"{ReportDir}\" /SoftpaqDownloadFolder:\"{DownloadDir}\"",
+      "report": "hpia",
+      "successCodes": [0, 256, 257, 3010, 3020],
+      "rebootCodes": [257, 3010, 3020],
+      "noUpdateCodes": [256],
+      "supportUrl": "https://support.hp.com/drivers",
+      "note": "เครื่อง HP เชิงธุรกิจ (EliteBook/ProBook/ZBook/Elite/Pro) วิเคราะห์และติดตั้ง SoftPaq ของ BIOS ไดรเวอร์ และเฟิร์มแวร์ที่ตรงรุ่น"
+    },
+    {
+      "vendor": "Microsoft Surface",
+      "match": "^Microsoft Corporation",
+      "modelMatch": "Surface",
+      "name": "Windows Update (Surface)",
+      "automated": false,
+      "windowsUpdate": true,
+      "supportUrl": "https://support.microsoft.com/surface/download-drivers-and-firmware-for-surface",
+      "note": "Surface รับไดรเวอร์และเฟิร์มแวร์ผ่าน Windows Update โดยตรง — ใช้รายการ Windows Update ด้านล่าง"
+    },
+    {
+      "vendor": "ASUS",
+      "match": "^(ASUSTeK|ASUS)",
+      "modelMatch": "ROG|TUF|Strix|Zephyrus|Flow",
+      "name": "Armoury Crate",
+      "winget": "Asus.ArmouryCrate",
+      "automated": false,
+      "supportUrl": "https://www.asus.com/support/download-center/",
+      "note": "เครื่อง ROG/TUF อัปเดตไดรเวอร์ผ่าน Armoury Crate > Update Center"
+    },
+    {
+      "vendor": "ASUS",
+      "match": "^(ASUSTeK|ASUS)",
+      "name": "MyASUS / ASUS Download Center",
+      "automated": false,
+      "supportUrl": "https://www.asus.com/support/download-center/",
+      "note": "โน้ตบุ๊ก ASUS ใช้ MyASUS (Microsoft Store) ส่วนเมนบอร์ด ASUS ดาวน์โหลดจาก Download Center ตามรุ่นบอร์ด"
+    },
+    {
+      "vendor": "MSI",
+      "match": "^(Micro-Star|MSI)",
+      "name": "MSI Center",
+      "winget": "MSI.MSICenter",
+      "automated": false,
+      "supportUrl": "https://www.msi.com/support/download",
+      "note": "อัปเดตไดรเวอร์ผ่าน MSI Center > Support > Live Update หรือหน้าดาวน์โหลดของ MSI"
+    },
+    {
+      "vendor": "Acer",
+      "match": "^Acer",
+      "name": "Acer Care Center / Acer Support",
+      "automated": false,
+      "supportUrl": "https://www.acer.com/support",
+      "note": "ใช้ Acer Care Center หรือค้นหาด้วย Serial Number/SNID ที่หน้า Acer Support"
+    },
+    {
+      "vendor": "Gigabyte",
+      "match": "^(Gigabyte|GIGABYTE)",
+      "name": "GIGABYTE Control Center / Support",
+      "automated": false,
+      "supportUrl": "https://www.gigabyte.com/Support",
+      "note": "ดาวน์โหลดไดรเวอร์ตามรุ่นเมนบอร์ด/โน้ตบุ๊กจากหน้า Support ของ GIGABYTE"
+    },
+    {
+      "vendor": "ASRock",
+      "match": "^ASRock",
+      "name": "ASRock Support",
+      "automated": false,
+      "supportUrl": "https://www.asrock.com/support/index.asp",
+      "note": "ดาวน์โหลดไดรเวอร์ตามรุ่นเมนบอร์ดจากหน้า Support ของ ASRock"
+    },
+    {
+      "vendor": "Samsung",
+      "match": "^Samsung",
+      "name": "Samsung Update / Support",
+      "automated": false,
+      "supportUrl": "https://www.samsung.com/support/",
+      "note": "ใช้ Samsung Update (Microsoft Store) หรือหน้า Support ของ Samsung"
+    },
+    {
+      "vendor": "Razer",
+      "match": "^Razer",
+      "name": "Razer Support",
+      "automated": false,
+      "supportUrl": "https://mysupport.razer.com/",
+      "note": "ดาวน์โหลดไดรเวอร์และเฟิร์มแวร์ของ Razer Blade จากหน้า Support"
+    },
+    {
+      "vendor": "Dynabook / Toshiba",
+      "match": "^(TOSHIBA|Dynabook)",
+      "name": "Dynabook Support",
+      "automated": false,
+      "supportUrl": "https://support.dynabook.com/",
+      "note": "ดาวน์โหลดไดรเวอร์ตามรุ่นจากหน้า Support ของ Dynabook"
+    }
+  ],
+  "componentVendors": [
+    {
+      "vendor": "Intel",
+      "ids": ["8086", "8087"],
+      "name": "Intel Driver & Support Assistant",
+      "winget": "Intel.IntelDriverAndSupportAssistant",
+      "url": "https://www.intel.com/content/www/us/en/support/detect.html",
+      "note": "ตรวจไดรเวอร์ Intel (กราฟิก Wi-Fi Bluetooth ชิปเซ็ต) จาก Intel โดยตรง — โน้ตบุ๊กบางรุ่นควรใช้ไดรเวอร์ที่ OEM ปรับแต่ง"
+    },
+    {
+      "vendor": "NVIDIA",
+      "ids": ["10DE"],
+      "classMatch": "^Display$",
+      "name": "NVIDIA App / NVIDIA Drivers",
+      "url": "https://www.nvidia.com/en-us/software/nvidia-app/",
+      "note": "ไดรเวอร์การ์ดจอ NVIDIA รุ่นล่าสุดจาก NVIDIA (ติดตั้งผ่าน NVIDIA App หรือดาวน์โหลดไฟล์แล้วเพิ่มในแท็บติดตั้งจากไฟล์)"
+    },
+    {
+      "vendor": "AMD",
+      "ids": ["1002", "1022"],
+      "classMatch": "^(Display|System)$",
+      "name": "AMD Software: Adrenalin / AMD Chipset",
+      "url": "https://www.amd.com/en/support/download/drivers.html",
+      "note": "ไดรเวอร์กราฟิกและชิปเซ็ต AMD รุ่นล่าสุดจาก AMD (Auto-Detect and Install)"
+    }
+  ],
+  "installerRules": [
+    {
+      "name": "Dell Update Package",
+      "company": "Dell",
+      "text": "Update Package|BIOS|Firmware|Driver",
+      "args": "/s /l=\"{LogFile}\"",
+      "successCodes": [0, 2, 3, 6],
+      "rebootCodes": [2, 6],
+      "upToDateCodes": [3],
+      "notApplicableCodes": [5]
+    },
+    {
+      "name": "HP SoftPaq",
+      "fileName": "^sp\\d+\\.exe$",
+      "args": "/s",
+      "successCodes": [0, 3010, 1641],
+      "rebootCodes": [3010, 1641]
+    },
+    {
+      "name": "Intel Chipset Device Software",
+      "fileName": "^SetupChipset.*\\.exe$",
+      "args": "-s -norestart",
+      "successCodes": [0, 3010, 14],
+      "rebootCodes": [3010, 14]
+    },
+    {
+      "name": "NVIDIA Install Application",
+      "text": "NVIDIA Install Application",
+      "args": "-s -noreboot",
+      "successCodes": [0, 1, 3010],
+      "rebootCodes": [1, 3010]
+    }
+  ],
+  "items": [
+    {
+      "id": "winget-appinstaller",
+      "name": "App Installer (winget) — ตัวติดตั้งแพ็กเกจของ Microsoft",
+      "group": "เตรียมระบบ",
+      "category": "prereq",
+      "order": 1,
+      "presets": ["recommended", "gaming", "work"],
+      "publisher": "Microsoft",
+      "skipIfInstalled": true,
+      "detect": [{ "type": "command", "name": "winget.exe" }],
+      "install": [
+        { "type": "builtin", "action": "RepairWinget" },
+        { "type": "direct", "url": "https://aka.ms/getwinget", "fileName": "Microsoft.DesktopAppInstaller.msixbundle", "kind": "appx" }
+      ],
+      "note": "จำเป็นสำหรับรายการที่ติดตั้งผ่าน winget (ตรวจ hash จาก manifest ที่ Microsoft ดูแล)"
+    },
+    {
+      "id": "vc2005-x86",
+      "name": "Visual C++ 2005 SP1 Redistributable (x86)",
+      "group": "Visual C++ Runtime",
+      "category": "runtime",
+      "order": 100,
+      "presets": ["gaming"],
+      "publisher": "Microsoft",
+      "skipIfInstalled": true,
+      "detect": [{ "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ 2005 Redistributable(?! \\(x64\\))" }],
+      "install": [{ "type": "winget", "id": "Microsoft.VCRedist.2005.x86" }],
+      "note": "หมดการสนับสนุนจาก Microsoft แล้ว — ติดตั้งเมื่อเกมหรือโปรแกรมรุ่นเก่าต้องใช้"
+    },
+    {
+      "id": "vc2005-x64",
+      "name": "Visual C++ 2005 SP1 Redistributable (x64)",
+      "group": "Visual C++ Runtime",
+      "category": "runtime",
+      "order": 101,
+      "arch": ["x64", "arm64"],
+      "presets": ["gaming"],
+      "publisher": "Microsoft",
+      "skipIfInstalled": true,
+      "detect": [{ "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ 2005 Redistributable \\(x64\\)" }],
+      "install": [{ "type": "winget", "id": "Microsoft.VCRedist.2005.x64" }],
+      "note": "หมดการสนับสนุนจาก Microsoft แล้ว — ติดตั้งเมื่อเกมหรือโปรแกรมรุ่นเก่าต้องใช้"
+    },
+    {
+      "id": "vc2008-x86",
+      "name": "Visual C++ 2008 SP1 Redistributable (x86)",
+      "group": "Visual C++ Runtime",
+      "category": "runtime",
+      "order": 110,
+      "presets": ["gaming"],
+      "publisher": "Microsoft",
+      "skipIfInstalled": true,
+      "detect": [{ "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ 2008 Redistributable - x86" }],
+      "install": [
+        { "type": "direct", "url": "https://download.microsoft.com/download/5/D/8/5D8C65CB-C849-4025-8E95-C3966CAFD8AE/vcredist_x86.exe", "args": "/q" },
+        { "type": "winget", "id": "Microsoft.VCRedist.2008.x86" }
+      ],
+      "successCodes": [0, 3010, 1641, 1638],
+      "note": "หมดการสนับสนุนจาก Microsoft แล้ว — ติดตั้งเมื่อเกมหรือโปรแกรมรุ่นเก่าต้องใช้"
+    },
+    {
+      "id": "vc2008-x64",
+      "name": "Visual C++ 2008 SP1 Redistributable (x64)",
+      "group": "Visual C++ Runtime",
+      "category": "runtime",
+      "order": 111,
+      "arch": ["x64", "arm64"],
+      "presets": ["gaming"],
+      "publisher": "Microsoft",
+      "skipIfInstalled": true,
+      "detect": [{ "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ 2008 Redistributable - x64" }],
+      "install": [
+        { "type": "direct", "url": "https://download.microsoft.com/download/5/D/8/5D8C65CB-C849-4025-8E95-C3966CAFD8AE/vcredist_x64.exe", "args": "/q" },
+        { "type": "winget", "id": "Microsoft.VCRedist.2008.x64" }
+      ],
+      "successCodes": [0, 3010, 1641, 1638],
+      "note": "หมดการสนับสนุนจาก Microsoft แล้ว — ติดตั้งเมื่อเกมหรือโปรแกรมรุ่นเก่าต้องใช้"
+    },
+    {
+      "id": "vc2010-x86",
+      "name": "Visual C++ 2010 SP1 Redistributable (x86)",
+      "group": "Visual C++ Runtime",
+      "category": "runtime",
+      "order": 120,
+      "presets": ["gaming"],
+      "publisher": "Microsoft",
+      "latestVersion": "10.0.40219.325",
+      "detect": [{ "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ 2010\\s+x86 Redistributable" }],
+      "install": [
+        { "type": "direct", "url": "https://download.microsoft.com/download/1/6/5/165255E7-1014-4D0A-B094-B6A430A6BFFC/vcredist_x86.exe", "args": "/q /norestart" },
+        { "type": "winget", "id": "Microsoft.VCRedist.2010.x86" }
+      ],
+      "successCodes": [0, 3010, 1641, 1638, 5100],
+      "note": "หมดการสนับสนุนจาก Microsoft แล้ว — ติดตั้งเมื่อเกมหรือโปรแกรมรุ่นเก่าต้องใช้"
+    },
+    {
+      "id": "vc2010-x64",
+      "name": "Visual C++ 2010 SP1 Redistributable (x64)",
+      "group": "Visual C++ Runtime",
+      "category": "runtime",
+      "order": 121,
+      "arch": ["x64", "arm64"],
+      "presets": ["gaming"],
+      "publisher": "Microsoft",
+      "latestVersion": "10.0.40219.325",
+      "detect": [{ "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ 2010\\s+x64 Redistributable" }],
+      "install": [
+        { "type": "direct", "url": "https://download.microsoft.com/download/1/6/5/165255E7-1014-4D0A-B094-B6A430A6BFFC/vcredist_x64.exe", "args": "/q /norestart" },
+        { "type": "winget", "id": "Microsoft.VCRedist.2010.x64" }
+      ],
+      "successCodes": [0, 3010, 1641, 1638, 5100],
+      "note": "หมดการสนับสนุนจาก Microsoft แล้ว — ติดตั้งเมื่อเกมหรือโปรแกรมรุ่นเก่าต้องใช้"
+    },
+    {
+      "id": "vc2012-x86",
+      "name": "Visual C++ 2012 Update 4 Redistributable (x86)",
+      "group": "Visual C++ Runtime",
+      "category": "runtime",
+      "order": 130,
+      "presets": ["gaming"],
+      "publisher": "Microsoft",
+      "latestVersion": "11.0.61030.0",
+      "detect": [
+        { "type": "registry", "path": "HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\11.0\\VC\\Runtimes\\x86", "value": "Version" },
+        { "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ 2012 Redistributable \\(x86\\)" }
+      ],
+      "install": [
+        { "type": "direct", "url": "https://download.microsoft.com/download/1/6/B/16B06F60-3B20-4FF2-B699-5E9B7962F9AE/VSU_4/vcredist_x86.exe", "args": "/install /quiet /norestart" },
+        { "type": "winget", "id": "Microsoft.VCRedist.2012.x86" }
+      ],
+      "successCodes": [0, 3010, 1641, 1638],
+      "note": "หมดการสนับสนุนจาก Microsoft แล้ว — ติดตั้งเมื่อเกมหรือโปรแกรมรุ่นเก่าต้องใช้"
+    },
+    {
+      "id": "vc2012-x64",
+      "name": "Visual C++ 2012 Update 4 Redistributable (x64)",
+      "group": "Visual C++ Runtime",
+      "category": "runtime",
+      "order": 131,
+      "arch": ["x64", "arm64"],
+      "presets": ["gaming"],
+      "publisher": "Microsoft",
+      "latestVersion": "11.0.61030.0",
+      "detect": [
+        { "type": "registry", "path": "HKLM:\\SOFTWARE\\Microsoft\\VisualStudio\\11.0\\VC\\Runtimes\\x64", "value": "Version" },
+        { "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ 2012 Redistributable \\(x64\\)" }
+      ],
+      "install": [
+        { "type": "direct", "url": "https://download.microsoft.com/download/1/6/B/16B06F60-3B20-4FF2-B699-5E9B7962F9AE/VSU_4/vcredist_x64.exe", "args": "/install /quiet /norestart" },
+        { "type": "winget", "id": "Microsoft.VCRedist.2012.x64" }
+      ],
+      "successCodes": [0, 3010, 1641, 1638],
+      "note": "หมดการสนับสนุนจาก Microsoft แล้ว — ติดตั้งเมื่อเกมหรือโปรแกรมรุ่นเก่าต้องใช้"
+    },
+    {
+      "id": "vc2013-x86",
+      "name": "Visual C++ 2013 Redistributable (x86)",
+      "group": "Visual C++ Runtime",
+      "category": "runtime",
+      "order": 140,
+      "presets": ["gaming"],
+      "publisher": "Microsoft",
+      "latestVersion": "12.0.40664.0",
+      "detect": [
+        { "type": "registry", "path": "HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\12.0\\VC\\Runtimes\\x86", "value": "Version" },
+        { "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ 2013 Redistributable \\(x86\\)" }
+      ],
+      "install": [
+        { "type": "direct", "url": "https://aka.ms/highdpimfc2013x86enu", "args": "/install /quiet /norestart" },
+        { "type": "winget", "id": "Microsoft.VCRedist.2013.x86" }
+      ],
+      "successCodes": [0, 3010, 1641, 1638],
+      "note": "หมดการสนับสนุนจาก Microsoft แล้ว — ติดตั้งเมื่อเกมหรือโปรแกรมรุ่นเก่าต้องใช้"
+    },
+    {
+      "id": "vc2013-x64",
+      "name": "Visual C++ 2013 Redistributable (x64)",
+      "group": "Visual C++ Runtime",
+      "category": "runtime",
+      "order": 141,
+      "arch": ["x64", "arm64"],
+      "presets": ["gaming"],
+      "publisher": "Microsoft",
+      "latestVersion": "12.0.40664.0",
+      "detect": [
+        { "type": "registry", "path": "HKLM:\\SOFTWARE\\Microsoft\\VisualStudio\\12.0\\VC\\Runtimes\\x64", "value": "Version" },
+        { "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ 2013 Redistributable \\(x64\\)" }
+      ],
+      "install": [
+        { "type": "direct", "url": "https://aka.ms/highdpimfc2013x64enu", "args": "/install /quiet /norestart" },
+        { "type": "winget", "id": "Microsoft.VCRedist.2013.x64" }
+      ],
+      "successCodes": [0, 3010, 1641, 1638],
+      "note": "หมดการสนับสนุนจาก Microsoft แล้ว — ติดตั้งเมื่อเกมหรือโปรแกรมรุ่นเก่าต้องใช้"
+    },
+    {
+      "id": "vc14-x86",
+      "name": "Visual C++ v14 Redistributable 2015–2026 (x86) รุ่นล่าสุด",
+      "group": "Visual C++ Runtime",
+      "category": "runtime",
+      "order": 150,
+      "presets": ["recommended", "gaming", "work"],
+      "publisher": "Microsoft",
+      "detect": [
+        { "type": "registry", "path": "HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x86", "value": "Version" },
+        { "type": "registry", "path": "HKLM:\\SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x86", "value": "Version" },
+        { "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ (v14|2015|2017|2019|2022)\\b.*\\(x86\\)" }
+      ],
+      "install": [
+        { "type": "direct", "url": "https://aka.ms/vc14/vc_redist.x86.exe", "args": "/install /quiet /norestart" },
+        { "type": "winget", "id": "Microsoft.VCRedist.2015+.x86" }
+      ],
+      "successCodes": [0, 3010, 1641, 1638],
+      "note": "จำเป็นสำหรับเกมและโปรแกรม 32 บิตส่วนใหญ่ (ลิงก์ถาวรรุ่นล่าสุดของ Microsoft)"
+    },
+    {
+      "id": "vc14-x64",
+      "name": "Visual C++ v14 Redistributable 2015–2026 (x64) รุ่นล่าสุด",
+      "group": "Visual C++ Runtime",
+      "category": "runtime",
+      "order": 151,
+      "arch": ["x64", "arm64"],
+      "presets": ["recommended", "gaming", "work"],
+      "publisher": "Microsoft",
+      "detect": [
+        { "type": "registry", "path": "HKLM:\\SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64", "value": "Version" },
+        { "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ (v14|2015|2017|2019|2022)\\b.*\\(x64\\)" }
+      ],
+      "install": [
+        { "type": "direct", "url": "https://aka.ms/vc14/vc_redist.x64.exe", "args": "/install /quiet /norestart" },
+        { "type": "winget", "id": "Microsoft.VCRedist.2015+.x64" }
+      ],
+      "successCodes": [0, 3010, 1641, 1638],
+      "note": "จำเป็นสำหรับเกมและโปรแกรม 64 บิตส่วนใหญ่ (แพ็กเกจ x64 มีไบนารี ARM64 ในตัว)"
+    },
+    {
+      "id": "vc14-arm64",
+      "name": "Visual C++ v14 Redistributable 2015–2026 (ARM64) รุ่นล่าสุด",
+      "group": "Visual C++ Runtime",
+      "category": "runtime",
+      "order": 152,
+      "arch": ["arm64"],
+      "presets": ["recommended", "gaming", "work"],
+      "publisher": "Microsoft",
+      "detect": [
+        { "type": "registry", "path": "HKLM:\\SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\arm64", "value": "Version" },
+        { "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ (v14|2015|2017|2019|2022)\\b.*\\(arm64\\)" }
+      ],
+      "install": [
+        { "type": "direct", "url": "https://aka.ms/vc14/vc_redist.arm64.exe", "args": "/install /quiet /norestart" },
+        { "type": "winget", "id": "Microsoft.VCRedist.2015+.arm64" }
+      ],
+      "successCodes": [0, 3010, 1641, 1638],
+      "note": "สำหรับโปรแกรม ARM64 แบบเนทีฟบน Windows on ARM"
+    },
+    {
+      "id": "dotnet-desktop",
+      "dynamic": "dotnet",
+      "framework": "Microsoft.WindowsDesktop.App",
+      "name": ".NET Windows Desktop Runtime",
+      "group": ".NET Runtime",
+      "category": "runtime",
+      "order": 200,
+      "publisher": "Microsoft",
+      "wingetTemplate": "Microsoft.DotNet.DesktopRuntime.{major}",
+      "successCodes": [0, 3010, 1641, 1638],
+      "note": "รันไทม์ .NET สำหรับโปรแกรมเดสก์ท็อป (WPF/WinForms) รวม .NET Runtime ในตัว — ดึงรุ่นล่าสุดจาก release metadata ของ Microsoft"
+    },
+    {
+      "id": "netfx35",
+      "name": ".NET Framework 3.5 (รวม 2.0 และ 3.0)",
+      "group": ".NET Framework",
+      "category": "runtime",
+      "order": 250,
+      "presets": ["gaming", "work"],
+      "publisher": "Microsoft",
+      "skipIfInstalled": true,
+      "detect": [{ "type": "feature", "name": "NetFx3" }],
+      "install": [{ "type": "feature", "name": "NetFx3" }],
+      "note": "ฟีเจอร์ของ Windows ดาวน์โหลดจาก Windows Update — โปรแกรมและเกมรุ่นเก่าจำนวนมากต้องใช้"
+    },
+    {
+      "id": "netfx481",
+      "name": ".NET Framework 4.8.1",
+      "group": ".NET Framework",
+      "category": "runtime",
+      "order": 251,
+      "presets": ["recommended", "gaming", "work"],
+      "publisher": "Microsoft",
+      "skipIfInstalled": true,
+      "detect": [{ "type": "netfx", "minRelease": 533320, "label": "4.8.1" }],
+      "install": [{ "type": "winget", "id": "Microsoft.DotNet.Framework.Runtime" }],
+      "note": "Windows 11 22H2 ขึ้นไปมีมาในตัวแล้ว — Windows 10 จะติดตั้งให้หากยังไม่มี"
+    },
+    {
+      "id": "directx-jun2010",
+      "name": "DirectX End-User Runtime (D3DX9/10/11, XInput 1.3, XAudio 2.7)",
+      "group": "เกมและมัลติมีเดีย",
+      "category": "runtime",
+      "order": 300,
+      "presets": ["recommended", "gaming"],
+      "publisher": "Microsoft",
+      "skipIfInstalled": true,
+      "detect": [{ "type": "file", "path": "%SystemRoot%\\System32\\d3dx9_43.dll", "alsoRequire": ["%SystemRoot%\\SysWOW64\\d3dx9_43.dll", "%SystemRoot%\\System32\\xinput1_3.dll", "%SystemRoot%\\System32\\XAudio2_7.dll"] }],
+      "install": [
+        { "type": "direct", "url": "https://download.microsoft.com/download/1/7/1/1718CCC4-6315-4D8E-9543-8E28A4E18C4C/dxwebsetup.exe", "args": "/Q", "compareVersion": false },
+        { "type": "winget", "id": "Microsoft.DirectX" }
+      ],
+      "successCodes": [0, 3010],
+      "note": "ไลบรารีเสริม DirectX ที่เกมรุ่นเก่าเรียกใช้ (ไม่ทับ DirectX 12 ของ Windows)"
+    },
+    {
+      "id": "xna40",
+      "name": "Microsoft XNA Framework 4.0 Refresh",
+      "group": "เกมและมัลติมีเดีย",
+      "category": "runtime",
+      "order": 310,
+      "presets": ["gaming"],
+      "publisher": "Microsoft",
+      "skipIfInstalled": true,
+      "detect": [{ "type": "uninstall", "pattern": "^Microsoft XNA Framework Redistributable 4\\.0" }],
+      "install": [{ "type": "winget", "id": "Microsoft.XNARedist" }],
+      "note": "เกมอินดี้รุ่นเก่าบางเกมต้องใช้"
+    },
+    {
+      "id": "gameinput",
+      "name": "Microsoft GameInput",
+      "group": "เกมและมัลติมีเดีย",
+      "category": "runtime",
+      "order": 320,
+      "presets": ["gaming"],
+      "publisher": "Microsoft",
+      "detect": [{ "type": "uninstall", "pattern": "^Microsoft GameInput" }],
+      "install": [{ "type": "winget", "id": "Microsoft.GameInput" }],
+      "note": "API อินพุตจอย/คีย์บอร์ด/เมาส์รุ่นใหม่ที่เกมปัจจุบันใช้"
+    },
+    {
+      "id": "webview2",
+      "name": "Microsoft Edge WebView2 Runtime (Evergreen)",
+      "group": "เว็บและแอปรันไทม์",
+      "category": "runtime",
+      "order": 400,
+      "presets": ["recommended", "gaming", "work"],
+      "publisher": "Microsoft",
+      "skipIfInstalled": true,
+      "detect": [
+        { "type": "registry", "path": "HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}", "value": "pv" },
+        { "type": "registry", "path": "HKLM:\\SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}", "value": "pv" },
+        { "type": "registry", "path": "HKCU:\\SOFTWARE\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}", "value": "pv" }
+      ],
+      "install": [
+        { "type": "direct", "url": "https://go.microsoft.com/fwlink/p/?LinkId=2124703", "fileName": "MicrosoftEdgeWebview2Setup.exe", "args": "/silent /install", "compareVersion": false },
+        { "type": "winget", "id": "Microsoft.EdgeWebView2Runtime" }
+      ],
+      "successCodes": [0],
+      "note": "ตัวเปิดหน้าเว็บที่ Launcher เกมและแอปสมัยใหม่ใช้ อัปเดตตัวเองอัตโนมัติหลังติดตั้ง"
+    },
+    {
+      "id": "powershell7",
+      "name": "PowerShell 7",
+      "group": "เครื่องมือระบบ",
+      "category": "tool",
+      "order": 500,
+      "presets": ["work"],
+      "publisher": "Microsoft",
+      "detect": [{ "type": "file", "path": "%ProgramFiles%\\PowerShell\\7\\pwsh.exe" }],
+      "install": [{ "type": "winget", "id": "Microsoft.PowerShell" }],
+      "note": "เชลล์รุ่นใหม่สำหรับงานสคริปต์และดูแลระบบ"
+    },
+    {
+      "id": "windows-terminal",
+      "name": "Windows Terminal",
+      "group": "เครื่องมือระบบ",
+      "category": "tool",
+      "order": 510,
+      "presets": ["work"],
+      "publisher": "Microsoft",
+      "detect": [{ "type": "appx", "name": "Microsoft.WindowsTerminal" }],
+      "install": [{ "type": "winget", "id": "Microsoft.WindowsTerminal" }],
+      "note": "Windows 11 มีมาในตัวแล้ว — จะอัปเดตเป็นรุ่นล่าสุด"
+    },
+    {
+      "id": "powertoys",
+      "name": "Microsoft PowerToys",
+      "group": "เครื่องมือระบบ",
+      "category": "tool",
+      "order": 520,
+      "presets": ["work"],
+      "publisher": "Microsoft",
+      "detect": [{ "type": "uninstall", "pattern": "^PowerToys" }],
+      "install": [{ "type": "winget", "id": "Microsoft.PowerToys" }],
+      "note": "ชุดเครื่องมือเพิ่มประสิทธิภาพการทำงาน (FancyZones, PowerToys Run, Awake ฯลฯ)"
+    },
+    {
+      "id": "sysinternals",
+      "name": "Sysinternals Suite",
+      "group": "เครื่องมือระบบ",
+      "category": "tool",
+      "order": 530,
+      "presets": [],
+      "publisher": "Microsoft",
+      "detect": [{ "type": "wingetPackage", "id": "Microsoft.Sysinternals.Suite" }],
+      "install": [{ "type": "winget", "id": "Microsoft.Sysinternals.Suite" }],
+      "note": "เครื่องมือวิเคราะห์ระบบเชิงลึก (Process Explorer, Autoruns ฯลฯ)"
+    },
+    {
+      "id": "7zip",
+      "name": "7-Zip (ใช้แตกไฟล์ไดรเวอร์ .7z/.rar/.exe SFX)",
+      "group": "เครื่องมือระบบ",
+      "category": "tool",
+      "order": 540,
+      "presets": ["work"],
+      "publisher": "Igor Pavlov (7-zip.org) ผ่าน winget",
+      "detect": [
+        { "type": "file", "path": "%ProgramFiles%\\7-Zip\\7z.exe" },
+        { "type": "file", "path": "%ProgramFiles(x86)%\\7-Zip\\7z.exe" }
+      ],
+      "install": [{ "type": "winget", "id": "7zip.7zip" }],
+      "note": "ไม่ใช่ของ Microsoft แต่ช่วยให้แท็บติดตั้งจากไฟล์รองรับไฟล์บีบอัดทุกแบบ"
+    },
+    {
+      "id": "tweak-gamemode",
+      "name": "เปิด Game Mode",
+      "group": "ปรับแต่งประสิทธิภาพ",
+      "category": "tweak",
+      "order": 900,
+      "presets": ["gaming"],
+      "publisher": "Windows",
+      "skipIfInstalled": true,
+      "detect": [{ "type": "setting", "name": "GameMode" }],
+      "install": [{ "type": "builtin", "action": "GameMode" }],
+      "note": "ให้ Windows จัดทรัพยากรให้เกมที่กำลังเล่นก่อน (ตั้งค่าของผู้ใช้ที่รันโปรแกรม)"
+    },
+    {
+      "id": "tweak-hags",
+      "name": "เปิด Hardware-accelerated GPU scheduling",
+      "group": "ปรับแต่งประสิทธิภาพ",
+      "category": "tweak",
+      "order": 910,
+      "presets": ["gaming"],
+      "publisher": "Windows",
+      "skipIfInstalled": true,
+      "detect": [{ "type": "setting", "name": "HAGS" }],
+      "install": [{ "type": "builtin", "action": "HAGS" }],
+      "note": "ลดความหน่วงของการ์ดจอที่รองรับ (WDDM 2.7+) มีผลหลังรีสตาร์ท"
+    },
+    {
+      "id": "tweak-power",
+      "name": "แผนพลังงาน High performance",
+      "group": "ปรับแต่งประสิทธิภาพ",
+      "category": "tweak",
+      "order": 920,
+      "presets": ["gaming"],
+      "condition": "desktop",
+      "publisher": "Windows",
+      "skipIfInstalled": true,
+      "detect": [{ "type": "setting", "name": "PowerPlan" }],
+      "install": [{ "type": "builtin", "action": "PowerPlan" }],
+      "note": "แนะนำสำหรับเดสก์ท็อป — โน้ตบุ๊กจะกินแบตเตอรี่มากขึ้น (ระบบ Modern Standby ให้ใช้ Settings > Power mode)"
+    }
+  ]
+}

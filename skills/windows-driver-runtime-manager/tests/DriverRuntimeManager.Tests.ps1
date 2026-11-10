@@ -1,4 +1,4 @@
-#requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.3.0' }
+﻿#requires -Modules @{ ModuleName = 'Pester'; ModuleVersion = '5.3.0' }
 # ทดสอบ Driver & Runtime Manager — ฟังก์ชันตรรกะทดสอบได้ทุกแพลตฟอร์ม ส่วนที่แท็ก Windows รันบน Windows เท่านั้น
 # รัน: Invoke-Pester -Path ./tests -Output Detailed
 
@@ -51,6 +51,19 @@ Describe 'แคตตาล็อก' {
         ($errors -join "`n") | Should -Match 'id ซ้ำ'
         ($errors -join "`n") | Should -Match 'bogus'
         ($errors -join "`n") | Should -Match 'evil\.example'
+    }
+}
+
+Describe 'การเข้ารหัสไฟล์ (Windows PowerShell 5.1 อ่านภาษาไทยได้)' {
+    It '<Name> เป็น UTF-8 มี BOM' -ForEach @(
+        @{ Name = 'scripts/DriverRuntimeManager.ps1' }, @{ Name = 'scripts/DriverRuntimeManager.psm1' }, @{ Name = 'tests/DriverRuntimeManager.Tests.ps1' }
+    ) {
+        $bytes = [IO.File]::ReadAllBytes((Join-Path (Split-Path -Parent $PSScriptRoot) $Name))
+        $bytes[0..2] | Should -Be @(0xEF, 0xBB, 0xBF)
+    }
+    It 'ตัวเปิด .cmd เป็น ASCII ล้วน' {
+        $bytes = [IO.File]::ReadAllBytes((Join-Path $script:ScriptsDir 'Start-DriverRuntimeManager.cmd'))
+        @($bytes | Where-Object { $_ -gt 127 }).Count | Should -Be 0
     }
 }
 
@@ -305,7 +318,9 @@ Describe 'รันไทม์ .NET และชุดที่เลือก'
         ($items | ForEach-Object { $_.id }) | Should -Contain 'dotnet-desktop-10.0-x64'
         ($items | ForEach-Object { $_.id }) | Should -Contain 'dotnet-desktop-8.0-x86'
         ($items | Where-Object id -eq 'dotnet-desktop-10.0-x64').presets | Should -Contain 'recommended'
-        @(($items | Where-Object id -eq 'dotnet-desktop-8.0-x64').presets).Count | Should -Be 0
+        $eol = $items | Where-Object id -eq 'dotnet-desktop-8.0-x64'
+        if ($eol.detectedVersion) { $eol.presets | Should -Contain 'recommended' -Because 'ติดตั้งอยู่แล้วจึงอัปเดตเป็นแพตช์สุดท้าย' }
+        else { @($eol.presets).Count | Should -Be 0 }
         (($items | Where-Object id -eq 'dotnet-desktop-10.0-x64').install | Where-Object type -eq 'winget').id | Should -Be 'Microsoft.DotNet.DesktopRuntime.10'
         InModuleScope DriverRuntimeManager { $script:DrmState.DotnetIndex = $null }
     }
@@ -376,7 +391,8 @@ Describe 'Windows จริง' -Tag 'Windows' -Skip:(-not $script:OnWindows) {
         $s.OS.Build | Should -BeGreaterThan 10000
         $s.OS.Architecture | Should -BeIn @('x64', 'arm64', 'x86')
         $s.Lifecycle | Should -Not -BeNullOrEmpty
-        @(ConvertTo-DrmSystemRows -System $s).Count | Should -BeGreaterThan 15
+        $rows = ConvertTo-DrmSystemRows -System $s
+        $rows.Count | Should -BeGreaterThan 15
     }
     It 'ตรวจอุปกรณ์และลำดับติดตั้งของทุกอุปกรณ์' {
         $pk = Get-DrmDriverPackages

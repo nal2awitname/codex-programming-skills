@@ -8,8 +8,11 @@
 | [app-builder](skills/app-builder/SKILL.md) | สร้างโปรแกรมหรือเพิ่มฟีเจอร์จนรันและตรวจรับได้ | `ใช้ $app-builder สร้าง CLI ด้วย Python สำหรับรวมไฟล์ CSV ตามรหัสสินค้า` |
 | [debug-and-fix](skills/debug-and-fix/SKILL.md) | ทำซ้ำอาการ หาสาเหตุ แก้บั๊ก และยืนยันผล | `ใช้ $debug-and-fix แก้ปัญหาตั้ง limit เป็น 0 แล้วกลับได้ค่าเริ่มต้น` |
 | [windows-simulator](skills/windows-simulator/SKILL.md) | เลือกและตั้งระบบจำลอง/ทดสอบ Windows (CI, VM, Docker, Wine) | `ใช้ $windows-simulator ตั้งระบบทดสอบสคริปต์ PowerShell บน Windows` |
+| [windows-driver-runtime-manager](skills/windows-driver-runtime-manager/SKILL.md) | ตรวจระบบและไดรเวอร์ทั้งหมด อัปเดตจากผู้ผลิตก่อนแล้วจึงไดรเวอร์ WHQL ที่ใหม่กว่า ติดตั้งรันไทม์และไฟล์ทุกรูปแบบผ่านหน้าต่างติ๊กเลือก | `ใช้ $windows-driver-runtime-manager ตรวจฮาร์ดแวร์ อัปเดตไดรเวอร์ และติดตั้งรันไทม์สำหรับเล่นเกม` |
 
 สกิลเหล่านี้เป็นขั้นตอนให้ AI ทำงานร่วมกับเครื่องมือและ runtime ที่มีในแต่ละแชต ความสามารถในการรัน ทดสอบ หรือเข้าถึง GitHub ขึ้นกับ environment และสิทธิ์ที่เชื่อมต่อไว้ ผลทดสอบต้องมาจากการรันจริง
+
+ดูสารบัญสกิลทั้งหมดแยกตามหมวดได้ที่ [skill for creating code](skill%20for%20creating%20code/README.md)
 
 ## ติดตั้งจาก GitHub
 

@@ -9,6 +9,7 @@
 | [debug-and-fix](skills/debug-and-fix/SKILL.md) | ทำซ้ำอาการ หาสาเหตุ แก้ไข และตรวจผล | `ใช้ $debug-and-fix แก้ error นี้พร้อม regression test` |
 | [windows-simulator](skills/windows-simulator/SKILL.md) | เลือกและตั้งระบบจำลอง/ทดสอบ Windows พร้อมเทียบตัวเลือก | `ใช้ $windows-simulator ตั้งระบบทดสอบสคริปต์ PowerShell บน Windows` |
 | [analyze-and-rebuild](skills/analyze-and-rebuild/SKILL.md) | วิเคราะห์ภาษาและโครงสร้าง สร้างใหม่โดยไม่คัดลอก พร้อมจัดส่วนประกอบส่ง GitHub | `ใช้ $analyze-and-rebuild วิเคราะห์และสร้างโปรแกรมนี้ใหม่` |
+| [windows-driver-runtime-manager](skills/windows-driver-runtime-manager/SKILL.md) | หน้าต่าง GUI ตรวจระบบและไดรเวอร์ทั้งหมด อัปเดตจากผู้ผลิตก่อนแล้วจึง WHQL ที่ใหม่กว่า ติดตั้งรันไทม์/ไฟล์ทุกรูปแบบ พร้อม log และรายงาน | `ใช้ $windows-driver-runtime-manager ตรวจและอัปเดตไดรเวอร์กับรันไทม์ของเครื่องนี้` |
 
 ## ติดตั้ง
 
@@ -34,6 +35,15 @@
 - [แม่แบบข้อกำหนดพฤติกรรม](templates/analyze-and-rebuild/behavior-contract.md)
 - [แม่แบบแผนผังส่วนประกอบ](templates/analyze-and-rebuild/components.md)
 - [แม่แบบบันทึกการสร้างใหม่](templates/analyze-and-rebuild/reconstruction-record.md)
+
+สารบัญสกิลแยกตามหมวดพร้อมคำอธิบายอยู่ที่ [skill for creating code](skill%20for%20creating%20code/README.md)
+
+## ตัวจัดการไดรเวอร์และรันไทม์ Windows
+
+ดับเบิลคลิก [`Start-DriverRuntimeManager.cmd`](skills/windows-driver-runtime-manager/scripts/Start-DriverRuntimeManager.cmd) บนเครื่อง Windows
+เพื่อเปิดหน้าต่างตรวจระบบ ตรวจชุดไดรเวอร์และระดับการรับรอง (WHQL/Attestation/ผู้ผลิต) อัปเดตจากผู้ผลิตเครื่อง (Dell/Lenovo/HP ...) ก่อน
+แล้วติดตั้งไดรเวอร์ที่ Microsoft รับรองซึ่งใหม่กว่า รันไทม์ Visual C++/.NET/DirectX/WebView2 จาก Microsoft โดยตรง และไฟล์ติดตั้งทุกรูปแบบ
+ตามลำดับที่ผู้ผลิตแนะนำ — [คู่มือภาษาไทย](docs/windows-driver-runtime-manager/README_TH.md)
 
 ## สคริปต์เสริม
 

@@ -122,7 +122,12 @@ function Write-DrmLog {
     )
     $line = '{0} [{1}] {2}' -f (Get-DrmTimestamp), $Level.ToUpperInvariant().PadRight(5), $Message
     if ($script:DrmState.LogFile) {
-        try { [IO.File]::AppendAllText($script:DrmState.LogFile, $line + [Environment]::NewLine, $script:Utf8Bom) } catch { }
+        # GUI มีหลาย runspace เขียนไฟล์เดียวกัน: ลองใหม่สั้น ๆ เมื่อไฟล์ถูกเปิดอยู่
+        for ($try = 0; $try -lt 5; $try++) {
+            try { [IO.File]::AppendAllText($script:DrmState.LogFile, $line + [Environment]::NewLine, $script:Utf8Bom); break }
+            catch [IO.IOException] { Start-Sleep -Milliseconds 15 }
+            catch { break }
+        }
     }
     if ($script:DrmState.Queue) {
         $script:DrmState.Queue.Enqueue([pscustomobject]@{ Type = 'Log'; Level = $Level; Text = $line })
@@ -907,7 +912,7 @@ function Get-DrmSystemInfo {
         SecureBoot   = $secureBoot
         Tpm          = $tpm
         Hvci         = $hvci
-        TestSigning  = ($startOpts -match 'TESTSIGNING')
+        TestSigning  = ($startOpts -match '(?<![A-Z])TESTSIGNING')
         NoIntegrity  = ($startOpts -match 'DISABLE_INTEGRITY_CHECKS')
         BitLocker    = $bitlocker
         UefiFirmware = (Test-Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State')
@@ -1125,6 +1130,9 @@ function Get-DrmDeviceInventory {
         $vid = Get-DrmVendorId $hw
         $class = [string]$e.PNPClass
         $name = [string]$e.Name
+        if (-not $name) { $name = [string]$e.Description }
+        if (-not $name) { $name = 'อุปกรณ์ไม่ทราบชื่อ: {0}' -f $(if ($hw.Count) { $hw[0] } else { $e.DeviceID }) }
+        if (-not $class) { $class = 'Unknown' }
         $ord = Get-DrmDriverOrder -Class $class -Name $name
         $code = [int]$e.ConfigManagerErrorCode
         $problem = if ($code -ne 0) { if ($script:ProblemText.ContainsKey($code)) { 'รหัส {0}: {1}' -f $code, $script:ProblemText[$code] } else { "รหัส $code" } } else { '' }
@@ -2729,7 +2737,7 @@ body{font-family:"Leelawadee UI","Segoe UI",Tahoma,sans-serif;margin:0;backgroun
 header{background:#1f4e79;color:#fff;padding:18px 28px}header h1{margin:0;font-size:22px}header p{margin:4px 0 0;opacity:.85}
 main{padding:20px 28px}section{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:14px 18px;margin-bottom:18px}
 h2{font-size:17px;margin:0 0 10px;color:#1f4e79}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid #e3e8ee;padding:6px 8px;text-align:left;vertical-align:top}
-th{background:#eef3f8}.ok{color:#1b7f3b;font-weight:600}.warn{color:#b26a00;font-weight:600}.err{color:#c62828;font-weight:600}.info{color:#4a5a6a}
+th{background:#eef3f8}td.ok,td.warn,td.err,td.info{white-space:nowrap}.ok{color:#1b7f3b;font-weight:600}.warn{color:#b26a00;font-weight:600}.err{color:#c62828;font-weight:600}.info{color:#4a5a6a}
 .cards{display:flex;flex-wrap:wrap;gap:12px}.card{flex:1 1 160px;background:#eef3f8;border-radius:8px;padding:10px 14px}.card b{display:block;font-size:22px}
 tr.error td{background:#fdecea}tr.warn td{background:#fff8e1}small{color:#667}
 '@

@@ -36,7 +36,9 @@ param(
     [switch]$ShowConsole,
     [string]$Root,
     [string]$CatalogPath,
-    [string]$LauncherPath
+    [string]$LauncherPath,
+    [int]$SmokeTestSeconds = 0,
+    [string]$SmokeTestReport
 )
 
 $ErrorActionPreference = 'Stop'
@@ -547,7 +549,7 @@ foreach ($path in $P.Paths) {
 function Start-UiWorker {
     param([string]$Slot = 'main', [string]$Body, [hashtable]$Params = @{}, [switch]$DryRunMode)
     if ($script:Workers[$Slot]) { return $false }
-    $script:Sync.Cancel = $false
+    if ($Slot -eq 'main') { $script:Sync.Cancel = $false }
     $rs = [runspacefactory]::CreateRunspace()
     $rs.ApartmentState = 'STA'
     $rs.ThreadOptions = 'ReuseThread'
@@ -812,6 +814,7 @@ function Show-InstallResult {
         if ($it) { $it.Status = ('{0} {1}' -f $r.Result.StatusText, $r.Result.Detail).Trim() }
     }
     if ($Summary.Resume) { $script:Ui.TxtStatus.Text = 'รอรีสตาร์ทเพื่อทำงานต่อ (ยกเลิกได้ด้วย shutdown /a)'; return }
+    if ($script:Smoke) { $script:SmokeSummary = $Summary; if ($Summary.Report) { $script:LastReport = $Summary.Report.Html }; return }
     if ($Summary.Checks) { Show-Checks $Summary.Checks; $script:Ui.Tabs.SelectedIndex = 0 }
     if ($Summary.Report) { $script:LastReport = $Summary.Report.Html }
     $text = "ติดตั้งเสร็จ: สำเร็จ/เป็นรุ่นล่าสุด {0}, ล้มเหลว {1}`n`nรายงานละเอียด: {2}`nLog: {3}" -f $Summary.Succeeded, $Summary.Failed, $script:LastReport, $script:Session.LogFile
@@ -829,6 +832,7 @@ function Invoke-UiMessage {
     switch ($m.Type) {
         'Log' {
             [void]$Log.AppendLine($m.Text)
+            if ($m.Level -eq 'Error') { $script:UiErrors++ }
             if ($m.Level -in 'Step', 'Error') { $script:Ui.TxtStatus.Text = ($m.Text -replace '^\S+ \S+ \[\w+\s*\] ', '') }
         }
         'Progress' { $script:Ui.Progress.Value = [double]$m.Percent; if ($m.Text) { $script:Ui.TxtStatus.Text = $m.Text } }
@@ -851,6 +855,50 @@ function Invoke-UiMessage {
     }
 }
 
+function Show-ConsoleWindow {
+    try { if ('DrmGui.Native' -as [type]) { $h = [DrmGui.Native]::GetConsoleWindow(); if ($h -ne [IntPtr]::Zero) { [void][DrmGui.Native]::ShowWindow($h, 5) } } } catch { }
+}
+
+function Start-SmokeTest {
+    <# ทดสอบหน้าต่างจริงแบบอัตโนมัติ: สแกน → ตรวจอัปเดต → เลือกชุดเล่นเกม → ติดตั้งโหมดทดลอง → บันทึกผล → ปิด #>
+    $script:SmokeStart = Get-Date
+    $script:SmokePhase = 'scan'
+    $script:SmokeTimer = New-Object System.Windows.Threading.DispatcherTimer
+    $script:SmokeTimer.Interval = [TimeSpan]::FromSeconds(1)
+    $script:SmokeTimer.Add_Tick({
+            $timedOut = ((Get-Date) - $script:SmokeStart).TotalSeconds -gt $SmokeTestSeconds
+            if ($script:SmokePhase -eq 'scan' -and $script:Scan -and $script:LastUpdate -and -not (Test-UiBusy)) {
+                Set-RuntimePreset 'gaming'
+                foreach ($i in 0..3) { $script:Ui.DevFilter.SelectedIndex = $i; Update-DeviceFilter }
+                $script:Ui.DevSearch.Text = 'a'; Update-DeviceFilter; $script:Ui.DevSearch.Text = ''
+                foreach ($i in $script:Updates) { $i.Selected = $true }
+                $script:Ui.ChkDryRun.IsChecked = $true
+                Update-SelectionSummary
+                $script:SmokePlan = New-DrmPlan -Items (Get-UiPlanItems)
+                Start-UiInstall -Plan $script:SmokePlan -Options (Get-UiOptions) -Snapshot (Get-DrmCleanupSnapshot)
+                $script:SmokePhase = 'install'
+                return
+            }
+            if (($script:SmokePhase -eq 'install' -and $script:SmokeSummary -and -not (Test-UiBusy)) -or $timedOut) {
+                $script:SmokeTimer.Stop()
+                $results = @(if ($script:SmokeSummary) { $script:SmokeSummary.Results } else { @() })
+                $out = [ordered]@{
+                    TimedOut = [bool]$timedOut; Phase = $script:SmokePhase; Seconds = [int]((Get-Date) - $script:SmokeStart).TotalSeconds
+                    SystemRows = $script:SysRows.Count; Checks = $script:CheckRows.Count; Devices = $script:Devices.Count
+                    DevicesShown = $script:Ui.TxtDevCount.Text; Updates = $script:Updates.Count; Runtimes = $script:Runtimes.Count
+                    Selection = $script:Ui.TxtSummary.Text; PlanItems = @($script:SmokePlan).Count; Results = $results.Count
+                    Failed = @($results | Where-Object { $_.Result.Status -eq 'Failed' } | ForEach-Object { '{0}: {1}' -f $_.Name, $_.Result.Detail })
+                    UiErrors = $script:UiErrors; Report = $script:LastReport; Log = $script:Session.LogFile
+                }
+                $path = if ($SmokeTestReport) { $SmokeTestReport } else { Join-Path $script:Session.ReportDir 'gui-smoke.json' }
+                [IO.File]::WriteAllText($path, ($out | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($true)))
+                $script:Workers.Clear()
+                $script:Ui.Window.Close()
+            }
+        })
+    $script:SmokeTimer.Start()
+}
+
 function Hide-ConsoleWindow {
     if ($ShowConsole) { return }
     try {
@@ -871,7 +919,11 @@ function Start-Gui {
     $script:Catalog = Get-DrmCatalog -Path $CatalogPath
     Set-DrmCatalogCached $script:Catalog
     $script:Scan = $null
+    $script:LastUpdate = $null
     $script:LastReport = $null
+    $script:UiErrors = 0
+    $script:Smoke = ($SmokeTestSeconds -gt 0)
+    $script:SmokeSummary = $null
     $script:SysRows = New-Object 'System.Collections.ObjectModel.ObservableCollection[DrmGui.GridItem]'
     $script:CheckRows = New-Object 'System.Collections.ObjectModel.ObservableCollection[DrmGui.GridItem]'
     $script:Devices = New-Object 'System.Collections.ObjectModel.ObservableCollection[DrmGui.GridItem]'
@@ -1005,6 +1057,7 @@ function Start-Gui {
                 Start-UiInstall -Plan @($state.Items) -Options $state.Options -Snapshot $state.Snapshot -ResumeAttempt ([int]$state.Attempt)
             }
             else { Start-UiScan -AutoCheck }
+            if ($script:Smoke) { Start-SmokeTest }
         })
     [void]$u.Window.ShowDialog()
     foreach ($w in @($script:Workers.Values)) { try { $w.PS.Stop(); $w.PS.Dispose(); $w.Runspace.Dispose() } catch { } }
@@ -1019,6 +1072,14 @@ switch ($Mode) {
     'Install' { exit (Invoke-HeadlessInstall) }
     default {
         if (-not (Test-DrmIsWindows)) { Write-Host 'หน้าต่าง GUI ใช้ได้บน Windows เท่านั้น' -ForegroundColor Red; exit 2 }
-        Start-Gui
+        try { Start-Gui }
+        catch {
+            Show-ConsoleWindow
+            Write-Host ("หน้าต่างหยุดทำงาน: {0}" -f $_.Exception.Message) -ForegroundColor Red
+            Write-Host $_.ScriptStackTrace -ForegroundColor DarkGray
+            try { Write-DrmLog ("GUI หยุดทำงาน: {0}" -f $_.Exception.Message) -Level Error } catch { }
+            exit 1
+        }
+        exit 0
     }
 }

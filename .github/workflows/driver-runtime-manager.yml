@@ -70,6 +70,21 @@ jobs:
           $exe = if ($PSVersionTable.PSEdition -eq 'Desktop') { 'powershell.exe' } else { 'pwsh.exe' }
           & $exe -NoProfile -STA -ExecutionPolicy Bypass -File scripts/DriverRuntimeManager.ps1 -Mode SelfTest
           if ($LASTEXITCODE -ne 0) { throw "SelfTest failed ($LASTEXITCODE)" }
+      - name: GUI smoke test — real window, background scan, update check, presets, dry-run install
+        timeout-minutes: 30
+        run: |
+          $exe = if ($PSVersionTable.PSEdition -eq 'Desktop') { 'powershell.exe' } else { 'pwsh.exe' }
+          $root = "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\gui"
+          $json = "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\gui-smoke.json"
+          New-Item -ItemType Directory -Force -Path (Split-Path $json) | Out-Null
+          & $exe -NoProfile -STA -ExecutionPolicy Bypass -File scripts/DriverRuntimeManager.ps1 -Mode Gui -NoElevate -ShowConsole -SmokeTestSeconds 1500 -SmokeTestReport $json -Root $root
+          if (-not (Test-Path $json)) { throw "GUI smoke test wrote no result (exit $LASTEXITCODE)" }
+          $r = Get-Content $json -Raw -Encoding UTF8 | ConvertFrom-Json
+          $r | Format-List | Out-String -Width 250 | Write-Host
+          if ($r.TimedOut) { throw "GUI smoke test timed out in phase $($r.Phase)" }
+          if ($r.Devices -lt 10 -or $r.Runtimes -lt 10 -or $r.SystemRows -lt 15) { throw 'GUI grids were not populated' }
+          if ($r.PlanItems -lt 1 -or $r.Results -ne $r.PlanItems) { throw "Dry-run install from the window did not complete ($($r.Results)/$($r.PlanItems))" }
+          if (@($r.Failed).Count) { throw ("Failed items: " + ($r.Failed -join '; ')) }
       - name: Detailed system scan with update check (manufacturer, then Windows Update)
         timeout-minutes: 25
         run: |

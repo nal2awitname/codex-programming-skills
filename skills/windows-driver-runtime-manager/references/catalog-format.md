@@ -65,6 +65,32 @@
 - `vendorIds`: แผนที่ Vendor ID → ชื่อผู้ผลิตที่แสดงในตาราง
 - `dotnet`: URL ของ release index, แม่แบบ URL ดาวน์โหลด, ช่องสำรองเมื่อออฟไลน์
 
+## ฐานข้อมูลรหัสข้อผิดพลาด (`scripts/errors.json`)
+
+```json
+{ "code": "0x800F081F", "sources": ["dism"], "title": "ความหมายสั้น ๆ", "fix": "วิธีแก้ที่ทำได้จริง" }
+```
+
+| ฟิลด์ | ความหมาย |
+| --- | --- |
+| `code` | เลขฐานสิบ (`1603`) หรือฐานสิบหก (`0x80240017`) — ค่าติดลบแบบ HRESULT แปลงให้อัตโนมัติ |
+| `sources` | บริบทที่ความหมายนี้ใช้: `msi`, `installer`, `wusa`, `windowsupdate`, `pnputil`, `winget`, `dism`, `appx`, `dcu`, `hpia`, `oem` — เว้นว่าง = ใช้ได้ทุกแหล่ง |
+| `title` / `fix` | ข้อความภาษาไทยที่แสดงใน log หน้าต่าง และรายงาน |
+
+`sourceHints` คือคำแนะนำทั่วไปต่อแหล่ง (เช่นให้เปิด `*.msi.log`) และ `deviceProblems` คือวิธีแก้ตามรหัสปัญหาของ Device Manager
+รหัสที่ไม่มีในไฟล์: ถ้าเป็น Win32/`0x8007xxxx` จะใช้ข้อความระบบของ Windows ส่วน winget จะแนะนำ `winget error <รหัส>`
+ฟังก์ชัน: `Get-DrmErrorInfo -Code -Source -Text`, `Get-DrmErrorSource -Method -Vendor`, `Get-DrmDeviceAdvice`
+เพิ่มรหัสแล้วรัน Pester (ตรวจว่าทุกรหัสแปลงได้ มีข้อความ และไม่ซ้ำในบริบทเดียวกัน)
+
+## ไฟล์ชุดที่เลือก (`-SelectionProfile` / `-ExportProfile` / ปุ่มในหน้าต่าง)
+
+```json
+{ "schemaVersion": 1, "runtimes": ["vc14-x64"], "includeOem": true, "includeWindowsUpdateDrivers": true,
+  "vendorTools": ["Intel"], "files": [{ "path": "D:\\drv\\lan.zip", "args": "" }], "options": { "Reboot": false } }
+```
+
+รายการที่ไม่มีบนเครื่องปลายทาง (สถาปัตยกรรมต่าง/ไฟล์ไม่อยู่) จะถูกข้ามพร้อมบันทึกเตือน — `New-DrmSelectionProfile`, `Save-DrmSelectionProfile`, `Read-DrmSelectionProfile`
+
 ## ข้อตกลงของโค้ด
 
 - โมดูลส่งออกทุกฟังก์ชันชื่อ `*-Drm*` GUI และโหมดคำสั่งเรียกฟังก์ชันชุดเดียวกัน
@@ -73,6 +99,10 @@
 - ไฟล์ .ps1/.psm1 เป็น UTF-8 มี BOM (ข้อความไทย), .cmd เป็น ASCII + CRLF; วันที่จัดรูปแบบด้วย InvariantCulture
 - GUI ทำงานหนักใน runspace แยก ส่งข้อความผ่าน `ConcurrentQueue` (`Log`, `Progress`, `Download`, `ItemStatus`, `ScanResult`, `UpdateResult`, `FileInfo`, `InstallResult`, `InstallCheckpoint`) และ DispatcherTimer อัปเดตหน้าจอทุก 150 ms
 - โหมดทดลอง (`-DryRun`) ต้องไม่เปลี่ยนแปลงระบบ: ทุกคำสั่งผ่าน `Invoke-DrmProcess` ซึ่งจะบันทึกแทนการรัน
+- เปิดหน้าเว็บ/โปรแกรมของผู้ผลิตผ่าน `Open-DrmTarget` เท่านั้น (ข้ามในโหมดทดลองและ `-NoBrowser` ของโหมดคำสั่ง)
+- คำสั่ง `-Capture` ที่ล้มเหลวเก็บผลลัพธ์เต็มที่ `Logs\Output_*.txt` (คืนใน `OutputFile`) และ `Invoke-DrmInstallPlan` เติม `Advice` ให้รายการที่ล้มเหลว/ไม่เข้ากัน/ข้าม
+- GUI ส่งข้อความเพิ่ม `DiagResult` และใช้ runspace แยก 3 ช่อง: `main` (สแกน/ติดตั้ง), `files` (วิเคราะห์ไฟล์), `diag` (ชุดดีบัก)
+- เปิดได้ทีละหน้าต่าง/การติดตั้ง (mutex `Global\DriverRuntimeManager.Instance`) — exit code 3 เมื่อมีตัวอื่นทำงานอยู่
 
 ## ทดสอบ
 

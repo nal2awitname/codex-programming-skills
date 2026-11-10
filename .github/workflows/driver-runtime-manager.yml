@@ -88,6 +88,34 @@ jobs:
           if ($r.Devices -lt 10 -or $r.Runtimes -lt 10 -or $r.SystemRows -lt 15) { throw 'GUI grids were not populated' }
           if ($r.PlanItems -lt 1 -or $r.Results -ne $r.PlanItems) { throw "Dry-run install from the window did not complete ($($r.Results)/$($r.PlanItems))" }
           if (@($r.Failed).Count) { throw ("Failed items: " + ($r.Failed -join '; ')) }
+          if ($r.ProfileBefore -lt 1 -or $r.ProfileBefore -ne $r.ProfileAfter) { throw "Selection profile round trip changed the selection ($($r.ProfileBefore) -> $($r.ProfileAfter))" }
+          if (-not $r.Diagnostics -or -not (Test-Path $r.Diagnostics)) { throw 'Diagnostics bundle from the window was not created' }
+          if ($r.Title -notmatch [regex]::Escape("v$($r.Version)")) { throw 'Window title does not show the version' }
+      - name: Diagnostics bundle (CLI) is complete and hides identifiers
+        timeout-minutes: 10
+        run: |
+          $exe = if ($PSVersionTable.PSEdition -eq 'Desktop') { 'powershell.exe' } else { 'pwsh.exe' }
+          $root = "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\diag"
+          & $exe -NoProfile -ExecutionPolicy Bypass -File scripts/DriverRuntimeManager.ps1 -Mode Diagnose -SinceHours 2 -NoElevate -Root $root
+          if ($LASTEXITCODE -ne 0) { throw "Diagnose failed ($LASTEXITCODE)" }
+          $zip = Get-ChildItem "$root\Reports" -Filter 'DRM_Diagnostics_*.zip' | Select-Object -First 1
+          if (-not $zip) { throw 'No diagnostics zip' }
+          $out = Join-Path $env:RUNNER_TEMP 'drm-diag-check-${{ matrix.shell }}'
+          Expand-Archive -LiteralPath $zip.FullName -DestinationPath $out -Force
+          foreach ($f in 'summary.txt', 'devices.csv', 'setupapi-dev-tail.log', 'events-pnp-configuration.txt', 'pnputil-enum-drivers.txt', 'README.txt') { if (-not (Test-Path (Join-Path $out $f))) { throw "Missing $f" } }
+          $leak = Get-ChildItem $out -File | Select-String -SimpleMatch $env:COMPUTERNAME -List
+          if ($leak) { throw ("Computer name not redacted in: " + (($leak | ForEach-Object { $_.Filename }) -join ', ')) }
+          Get-Content (Join-Path $out 'summary.txt') -TotalCount 25 -Encoding UTF8 | Write-Host
+      - name: Launcher from a folder with spaces and parentheses
+        if: matrix.shell == 'powershell'
+        timeout-minutes: 5
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'Driver Tools (1)'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item scripts\* $dir -Recurse -Force
+          $env:DRM_NO_PAUSE = '1'
+          $p = Start-Process -FilePath (Join-Path $dir 'Start-DriverRuntimeManager.cmd') -ArgumentList '-Mode', 'SelfTest', '-NoElevate' -Wait -PassThru -NoNewWindow
+          if ($p.ExitCode -ne 0) { throw "Launcher SelfTest failed ($($p.ExitCode))" }
       - name: Detailed system scan with update check (manufacturer, then Windows Update)
         timeout-minutes: 25
         run: |
@@ -111,8 +139,22 @@ jobs:
           $report = Get-Content $json.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
           $report.Results | Format-Table Name, Status, Method, ExitCode, Detail -AutoSize -Wrap | Out-String -Width 250 | Write-Host
           if ($code -ne 0) { throw "Real install reported failures ($code)" }
-          $again = & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Import-Module ./scripts/DriverRuntimeManager.psm1; `$c = Get-DrmCatalog -Path ./scripts/catalog.json; (Get-DrmRuntimeItems -Catalog `$c -Offline | Where-Object { `$_.Id -in 'vc14-x64','vc14-x86','directx-jun2010','dotnet-desktop-10.0-x64' -and -not `$_.Installed }).Count"
-          if ([int]($again | Select-Object -Last 1) -ne 0) { throw 'Runtimes not detected after install' }
+          # เก็บผลใส่ตัวแปรก่อนกรอง (ฟังก์ชันคืนอาร์เรย์เป็นออบเจกต์เดียว ถ้า pipe ตรง ๆ ตัวกรองจะไม่ทำงาน)
+          $again = & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Import-Module ./scripts/DriverRuntimeManager.psm1; `$c = Get-DrmCatalog -Path ./scripts/catalog.json; `$all = Get-DrmRuntimeItems -Catalog `$c -Offline; `$want = 'vc14-x64','vc14-x86','vc2013-x64','vc2010-x64','directx-jun2010','dotnet-desktop-10.0-x64'; 'found=' + @(`$all | Where-Object { `$want -contains `$_.Id -and `$_.Installed }).Count"
+          Write-Host ($again -join ' ')
+          if (($again | Select-Object -Last 1) -ne 'found=6') { throw "Not all installed runtimes are detected after install: $again" }
+      - name: Second install pass reinstalls nothing (update only when newer)
+        if: matrix.shell == 'powershell'
+        timeout-minutes: 20
+        run: |
+          $root = "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\real2"
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/DriverRuntimeManager.ps1 -Mode Install -Items 'vc14-x64,vc14-x86,vc2013-x64,vc2010-x64,directx-jun2010,webview2,dotnet-desktop-10.0-x64' -NoRestorePoint -NoElevate -Root $root
+          if ($LASTEXITCODE -ne 0) { throw "Second pass reported failures ($LASTEXITCODE)" }
+          $json = Get-ChildItem "$root\Reports" -Filter *.json | Sort-Object LastWriteTime | Select-Object -Last 1
+          $report = Get-Content $json.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+          $report.Results | Format-Table Name, Status, Method, Detail -AutoSize -Wrap | Out-String -Width 250 | Write-Host
+          $reinstalled = @($report.Results | Where-Object { $_.Status -ne 'UpToDate' })
+          if ($reinstalled.Count) { throw ("Reinstalled although already current: " + (($reinstalled | ForEach-Object { '{0} ({1})' -f $_.Name, $_.Status }) -join '; ')) }
       - name: Upload logs and reports
         if: always()
         uses: actions/upload-artifact@v4

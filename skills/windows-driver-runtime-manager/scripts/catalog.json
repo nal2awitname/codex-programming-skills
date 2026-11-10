@@ -372,7 +372,7 @@
       "order": 120,
       "presets": ["gaming"],
       "publisher": "Microsoft",
-      "latestVersion": "10.0.40219.325",
+      "latestVersion": "10.0.40219",
       "detect": [{ "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ 2010\\s+x86 Redistributable" }],
       "install": [
         { "type": "direct", "url": "https://download.microsoft.com/download/1/6/5/165255E7-1014-4D0A-B094-B6A430A6BFFC/vcredist_x86.exe", "args": "/q /norestart" },
@@ -390,7 +390,7 @@
       "arch": ["x64", "arm64"],
       "presets": ["gaming"],
       "publisher": "Microsoft",
-      "latestVersion": "10.0.40219.325",
+      "latestVersion": "10.0.40219",
       "detect": [{ "type": "uninstall", "pattern": "^Microsoft Visual C\\+\\+ 2010\\s+x64 Redistributable" }],
       "install": [
         { "type": "direct", "url": "https://download.microsoft.com/download/1/6/5/165255E7-1014-4D0A-B094-B6A430A6BFFC/vcredist_x64.exe", "args": "/q /norestart" },

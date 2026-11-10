@@ -61,6 +61,12 @@ Describe 'การเข้ารหัสไฟล์ (Windows PowerShell 5.1 
         $bytes = [IO.File]::ReadAllBytes((Join-Path (Split-Path -Parent $PSScriptRoot) $Name))
         $bytes[0..2] | Should -Be @(0xEF, 0xBB, 0xBF)
     }
+    It 'ตัวเปิด .cmd ไม่ใส่เครื่องหมายคำพูดรอบ %* และข้าม pause ได้' {
+        $text = [IO.File]::ReadAllText((Join-Path $script:ScriptsDir 'Start-DriverRuntimeManager.cmd'))
+        $text | Should -Not -Match "'%\*'"
+        $text | Should -Match 'DRM_NO_PAUSE'
+        $text | Should -Match '-HideConsole %\*'
+    }
     It 'ตัวเปิด .cmd เป็น ASCII ล้วน' {
         $bytes = [IO.File]::ReadAllBytes((Join-Path $script:ScriptsDir 'Start-DriverRuntimeManager.cmd'))
         @($bytes | Where-Object { $_ -gt 127 }).Count | Should -Be 0
@@ -381,6 +387,187 @@ Describe 'รันแผนทั้งหมดในโหมดทดลอ�
         ($sum.Results | ForEach-Object { $_.Phase }) -join ',' | Should -Be (($plan | ForEach-Object { $_.Phase }) -join ',')
         Test-Path -LiteralPath $sum.Report.Html | Should -BeTrue
         [IO.File]::ReadAllText($s.LogFile) | Should -Match 'ทดลอง'
+        Initialize-DrmSession -Root (Join-Path $script:TestRoot 'root') | Out-Null
+    }
+}
+
+Describe 'v1.1: ฐานข้อมูลรหัสข้อผิดพลาด' {
+    It 'errors.json ถูกต้อง: ทุกรหัสแปลงได้ มีความหมายและวิธีแก้' {
+        $kb = Get-DrmErrorKb -Path (Join-Path $script:ScriptsDir 'errors.json') -Reload
+        @($kb.codes).Count | Should -BeGreaterThan 40
+        foreach ($e in $kb.codes) {
+            (ConvertTo-DrmErrorCode $e.code) | Should -Not -BeNullOrEmpty -Because $e.code
+            $e.title | Should -Not -BeNullOrEmpty -Because $e.code
+            $e.fix | Should -Not -BeNullOrEmpty -Because $e.code
+        }
+        $keys = @($kb.codes | ForEach-Object { '{0}|{1}' -f (ConvertTo-DrmErrorCode $_.code).Hex, (@($_.sources) -join ',') })
+        ($keys | Select-Object -Unique).Count | Should -Be $keys.Count
+        foreach ($p in $kb.deviceProblems.PSObject.Properties) { [string]$p.Value | Should -Not -BeNullOrEmpty }
+    }
+    It 'แปลงรหัสได้ทั้งฐานสิบ ติดลบ และฐานสิบหก' {
+        (ConvertTo-DrmErrorCode -2145124329).Hex | Should -Be '0x80240017'
+        (ConvertTo-DrmErrorCode '0x80240017').Signed | Should -Be -2145124329
+        (ConvertTo-DrmErrorCode 1603).Hex | Should -Be '0x00000643'
+        ConvertTo-DrmErrorCode 'abc' | Should -BeNullOrEmpty
+        ConvertTo-DrmErrorCode $null | Should -BeNullOrEmpty
+    }
+    It 'รหัส <Code> จาก <Source> = <Expect>' -ForEach @(
+        @{ Code = 1603; Source = 'msi'; Text = ''; Expect = 'ร้ายแรง'; Known = $true }
+        @{ Code = -2145124329; Source = 'wusa'; Text = ''; Expect = 'ไม่เข้ากับ'; Known = $true }
+        @{ Code = $null; Source = 'windowsupdate'; Text = 'ResultCode 4, HResult 0x80070103'; Expect = 'ติดตั้งอยู่แล้ว'; Known = $true }
+        @{ Code = 1; Source = 'dcu'; Text = ''; Expect = 'Dell'; Known = $true }
+        @{ Code = 259; Source = 'pnputil'; Text = ''; Expect = 'Driver Store'; Known = $true }
+        @{ Code = '0x800F081F'; Source = 'dism'; Text = ''; Expect = 'NetFx3'; Known = $true }
+        @{ Code = '0x8A15002B'; Source = 'winget'; Text = ''; Expect = 'ไม่มีรุ่นใหม่'; Known = $true }
+    ) {
+        $i = Get-DrmErrorInfo -Code $Code -Source $Source -Text $Text
+        $i.Known | Should -Be $Known
+        ('{0} {1}' -f $i.Title, $i.Fix) | Should -Match $Expect
+    }
+    It 'รหัสเดียวกันต่างบริบท: 1 จากตัวติดตั้งทั่วไปไม่ใช่ความหมายของ Dell' {
+        (Get-DrmErrorInfo -Code 1 -Source 'installer').Known | Should -BeFalse
+        (Get-DrmErrorInfo -Code 1 -Source 'dcu').Title | Should -Match 'Dell'
+    }
+    It 'รหัส winget ที่ไม่รู้จักแนะนำคำสั่ง winget error' {
+        (Get-DrmErrorInfo -Code '0x8A150099' -Source 'winget').Fix | Should -Match 'winget error 0x8A150099'
+    }
+    It 'สำเร็จหรือไม่มีรหัสไม่ต้องมีคำแนะนำ' {
+        Get-DrmErrorInfo -Code 0 -Source 'msi' | Should -BeNullOrEmpty
+        Get-DrmErrorInfo -Code $null -Source 'msi' -Text 'ไม่มีรหัส' | Should -BeNullOrEmpty
+    }
+    It 'แหล่งรหัสจากวิธีติดตั้ง: <Method> = <Expect>' -ForEach @(
+        @{ Method = 'winget upgrade'; Vendor = ''; Expect = 'winget' }; @{ Method = 'windowsupdate'; Vendor = ''; Expect = 'windowsupdate' }
+        @{ Method = 'pnputil'; Vendor = ''; Expect = 'pnputil' }; @{ Method = 'Msi'; Vendor = ''; Expect = 'msi' }
+        @{ Method = 'oem'; Vendor = 'Dell'; Expect = 'dcu' }; @{ Method = 'oem'; Vendor = 'HP'; Expect = 'hpia' }
+        @{ Method = 'direct aka.ms'; Vendor = ''; Expect = 'installer' }; @{ Method = 'Exe'; Vendor = ''; Expect = 'installer' }
+    ) {
+        Get-DrmErrorSource -Method $Method -Vendor $Vendor | Should -Be $Expect
+    }
+    It 'คำแนะนำสำหรับรหัสปัญหาของอุปกรณ์' {
+        Get-DrmDeviceAdvice 28 | Should -Match 'Microsoft Update Catalog'
+        Get-DrmDeviceAdvice 999 | Should -Not -BeNullOrEmpty
+        Get-DrmDeviceAdvice 0 | Should -BeNullOrEmpty
+    }
+}
+
+Describe 'v1.1: Microsoft Update Catalog และการซ่อนข้อมูล' {
+    It 'ลิงก์ค้นหาจาก Hardware ID: <Expect>' -ForEach @(
+        @{ Ids = @('PCI\VEN_8086&DEV_A0E8&SUBSYS_0A9F1028&REV_20'); Expect = 'q=VEN_8086%26DEV_A0E8' }
+        @{ Ids = @('USB\VID_0BDA&PID_8153&REV_3100'); Expect = 'q=VID_0BDA%26PID_8153' }
+        @{ Ids = @('ACPI\INT33A0'); Expect = 'q=ACPI%5CINT33A0' }
+    ) {
+        Get-DrmUpdateCatalogUrl -HardwareIds $Ids | Should -Match ([regex]::Escape('https://www.catalog.update.microsoft.com/Search.aspx?' + $Expect))
+    }
+    It 'ไม่มี Hardware ID ไม่มีลิงก์' { Get-DrmUpdateCatalogUrl -HardwareIds @() | Should -BeNullOrEmpty }
+    It 'ซ่อนชื่อเครื่อง ชื่อผู้ใช้ และ Serial โดยไม่สนตัวพิมพ์' {
+        $t = Protect-DrmText -Text 'PC DESKTOP-ABC user Somchai path C:\Users\somchai sn 5CG1234XYZ' -Secrets @('desktop-abc', 'somchai', '5CG1234XYZ', 'ab')
+        $t | Should -Not -Match 'DESKTOP-ABC|somchai|5CG1234XYZ'
+        $t | Should -Match 'user <ซ่อน>'
+        $t | Should -Match 'PC <ซ่อน>'
+    }
+}
+
+Describe 'v1.1: โหมดคำสั่งและชุดที่เลือก' {
+    It 'เปิดใหม่ด้วยสิทธิ์ Admin: -Files คั่นด้วย ; -Items คั่นด้วย , และ -NoExit ก่อน -File' {
+        $line = ConvertTo-DrmArgumentList -BoundParameters ([ordered]@{ Mode = 'Install'; Files = @('C:\a b\x.zip', 'D:\y.inf'); Items = @('vc14-x64', '7zip'); DryRun = [switch]$true; NoElevate = [switch]$false }) -ScriptPath 'C:\t\DriverRuntimeManager.ps1' -NoExit
+        $line | Should -Match '-Files "C:\\a b\\x\.zip;D:\\y\.inf"'
+        $line | Should -Match '-Items "vc14-x64,7zip"'
+        $line | Should -Match '-NoExit -File "C:\\t\\DriverRuntimeManager\.ps1"'
+        $line | Should -Match '-DryRun'
+        $line | Should -Not -Match 'NoElevate'
+    }
+    It 'ระบุ -Items โดยไม่ระบุ -Preset จะไม่รวมชุดแนะนำ' {
+        Resolve-DrmPreset -Preset 'recommended' -PresetSpecified $false -Items @('vc14-x64') | Should -Be 'none'
+        Resolve-DrmPreset -Preset 'gaming' -PresetSpecified $true -Items @('vc14-x64') | Should -Be 'gaming'
+        Resolve-DrmPreset -Preset 'recommended' -PresetSpecified $false -Items @() | Should -Be 'recommended'
+    }
+    It 'บันทึกและโหลดชุดที่เลือกได้ครบ' {
+        $path = Join-Path $script:TestRoot 'profiles\gaming.json'
+        $sel = New-DrmSelectionProfile -RuntimeIds @('vc14-x64', 'directx-jun2010') -IncludeOem $true -IncludeWindowsUpdate $true -VendorTools @('Intel') -Files @([pscustomobject]@{ path = 'D:\drv\lan.zip'; args = '/S' }) -Options ([pscustomobject]@{ Reboot = $true }) -Name 'ทดสอบ'
+        [void](Save-DrmSelectionProfile -Selection $sel -Path $path)
+        $back = Read-DrmSelectionProfile -Path $path
+        @($back.runtimes) -join ',' | Should -Be 'vc14-x64,directx-jun2010'
+        $back.includeOem | Should -BeTrue
+        $back.includeWindowsUpdateDrivers | Should -BeTrue
+        @($back.vendorTools) | Should -Contain 'Intel'
+        $back.files[0].args | Should -Be '/S'
+        $back.options.Reboot | Should -BeTrue
+        $back.name | Should -Be 'ทดสอบ'
+    }
+    It 'ไฟล์ชุดที่เลือกผิดรูปแบบแจ้งข้อผิดพลาดภาษาไทย' {
+        $bad = Join-Path $script:TestRoot 'bad.json'
+        Set-Content -LiteralPath $bad -Value '{"schemaVersion": 9}' -Encoding UTF8
+        { Read-DrmSelectionProfile -Path $bad } | Should -Throw '*schemaVersion*'
+        { Read-DrmSelectionProfile -Path (Join-Path $script:TestRoot 'none.json') } | Should -Throw '*ไม่พบไฟล์*'
+    }
+}
+
+Describe 'v1.1: ตรวจอายุไดรเวอร์และบันทึกผลคำสั่งที่ล้มเหลว' {
+    It 'เตือนไดรเวอร์ผู้ผลิตที่เก่ากว่า 3 ปี' {
+        $devices = @(
+            [pscustomobject]@{ Name = 'Old LAN'; Present = $true; ProblemCode = 0; CertLevel = 'WHQL'; DriverDate = '2019-05-01' }
+            [pscustomobject]@{ Name = 'New GPU'; Present = $true; ProblemCode = 0; CertLevel = 'WHQL'; DriverDate = '2026-09-01' }
+            [pscustomobject]@{ Name = 'Inbox disk'; Present = $true; ProblemCode = 0; CertLevel = 'Inbox'; DriverDate = '2006-06-21' }
+        )
+        $checks = Get-DrmCompatibilityChecks -Devices $devices -Today ([datetime]'2026-11-10')
+        $c = $checks | Where-Object Area -eq 'อายุไดรเวอร์'
+        $c.Status | Should -Be 'เตือน'
+        $c.Detail | Should -Match 'Old LAN'
+        $c.Detail | Should -Not -Match 'Inbox disk|New GPU'
+    }
+    It 'ผลลัพธ์เต็มของคำสั่งที่ล้มเหลวถูกเก็บไว้ในโฟลเดอร์ Logs' {
+        $s = Initialize-DrmSession -Root (Join-Path $script:TestRoot 'outcap')
+        $exe = (Get-Process -Id $PID).Path
+        $r = Invoke-DrmProcess -FilePath $exe -Arguments '-NoProfile -Command "Write-Output drm-debug-marker; exit 7"' -Capture -TimeoutMinutes 2
+        $r.ExitCode | Should -Be 7
+        $r.OutputFile | Should -Not -BeNullOrEmpty
+        [IO.File]::ReadAllText($r.OutputFile) | Should -Match 'drm-debug-marker'
+        (Split-Path -Parent $r.OutputFile) | Should -Be $s.LogDir
+        Initialize-DrmSession -Root (Join-Path $script:TestRoot 'root') | Out-Null
+    }
+    It 'คำสั่งที่สำเร็จไม่สร้างไฟล์ผลลัพธ์' {
+        $exe = (Get-Process -Id $PID).Path
+        (Invoke-DrmProcess -FilePath $exe -Arguments '-NoProfile -Command "exit 0"' -Capture -TimeoutMinutes 2).OutputFile | Should -BeNullOrEmpty
+    }
+}
+
+Describe 'v1.1: แผนติดตั้งแนบวิธีแก้เมื่อล้มเหลว' {
+    It 'ตัวติดตั้งที่คืน 1603 ได้สถานะล้มเหลวพร้อมคำแนะนำภาษาไทยใน log และรายงาน' {
+        $s = Initialize-DrmSession -Root (Join-Path $script:TestRoot 'advice') -NoBrowser
+        $exe = (Get-Process -Id $PID).Path
+        $info = [pscustomobject]@{ Id = 'file:fake-installer'; Path = $exe; Name = 'fake-installer.exe'; Kind = 'Exe'; Args = '-NoProfile -Command "exit 1603"'; SignatureValid = $true; OrderIndex = 90; OrderGroup = 'อื่น ๆ'; SuccessCodes = @(0); RebootCodes = @(3010); UpToDateCodes = @(1638); NotApplicableCodes = @() }
+        $plan = New-DrmPlan -Items @(New-DrmPlanItemFromLocal -Info $info)
+        $opt = [pscustomobject]@{ CreateRestorePoint = $false; ResumeAfterReboot = $false; Cleanup = $false }
+        $sum = Invoke-DrmInstallPlan -Plan $plan -Options $opt -Catalog $script:Catalog
+        # Windows คืนรหัสเต็ม ส่วน Linux/macOS ตัด exit code เหลือ 0-255 (1603 -> 67)
+        $onWin = ($PSVersionTable.PSEdition -eq 'Desktop') -or [bool](Get-Variable IsWindows -ValueOnly -ErrorAction SilentlyContinue)
+        $expected = if ($onWin) { 1603 } else { 1603 % 256 }
+        $hex = '0x{0:X8}' -f $expected
+        $res = $sum.Results[0].Result
+        $res.Status | Should -Be 'Failed'
+        $res.ExitCode | Should -Be $expected
+        $res.Advice | Should -Match $hex
+        $res.Advice | Should -Match 'วิธีแก้'
+        if ($onWin) { $res.Advice | Should -Match 'ร้ายแรง' }
+        [IO.File]::ReadAllText($s.LogFile) | Should -Match ('คำแนะนำ: ' + $hex)
+        [IO.File]::ReadAllText($sum.Report.Html) | Should -Match 'วิธีแก้'
+        ([IO.File]::ReadAllText($sum.Report.Json) | ConvertFrom-Json).Results[0].Advice | Should -Match $hex
+        Initialize-DrmSession -Root (Join-Path $script:TestRoot 'root') | Out-Null
+    }
+}
+
+Describe 'v1.1: ชุดข้อมูลดีบัก' {
+    It 'สร้าง zip ที่มีสรุป log อุปกรณ์ Event Log และ README' {
+        $s = Initialize-DrmSession -Root (Join-Path $script:TestRoot 'diag')
+        Write-DrmLog 'ข้อความสำหรับทดสอบชุดดีบัก' -Level Info
+        $d = New-DrmDiagnosticsBundle -SinceHours 1 -Catalog $script:Catalog -Devices @([pscustomobject]@{ Name = 'Unknown'; Class = 'Unknown'; Present = $true; ProblemCode = 28; ProblemText = 'รหัส 28'; Advice = 'ทดสอบ'; CatalogUrl = 'https://www.catalog.update.microsoft.com/Search.aspx?q=X'; HardwareIds = @('PCI\VEN_1234&DEV_5678') })
+        Test-Path -LiteralPath $d.Path | Should -BeTrue
+        $d.Redacted | Should -BeTrue
+        foreach ($f in 'summary.txt', 'devices-problem.txt', 'devices.csv', 'setupapi-dev-tail.log', 'events-windowsupdate.txt', 'pnputil-enum-drivers.txt', 'README.txt') { $d.Files | Should -Contain $f }
+        @($d.Files | Where-Object { $_ -like 'logs_*' }).Count | Should -BeGreaterThan 0
+        $out = Join-Path $script:TestRoot 'diag-unzipped'
+        Expand-Archive -LiteralPath $d.Path -DestinationPath $out -Force
+        [IO.File]::ReadAllText((Join-Path $out 'devices-problem.txt')) | Should -Match 'VEN_1234'
         Initialize-DrmSession -Root (Join-Path $script:TestRoot 'root') | Out-Null
     }
 }

@@ -7,7 +7,7 @@
 
 | สกิล | ใช้เมื่อ | สิ่งที่ได้ |
 | --- | --- | --- |
-| [windows-driver-runtime-manager](../skills/windows-driver-runtime-manager/SKILL.md) | ตรวจเครื่อง Windows ตรวจ/อัปเดตไดรเวอร์ ติดตั้งรันไทม์สำหรับเกมและงาน ติดตั้งไฟล์ไดรเวอร์ทุกรูปแบบ | หน้าต่าง GUI ติ๊กเลือก (PowerShell + WPF), อัปเดตจากผู้ผลิตก่อนแล้วจึง WHQL ที่ใหม่กว่า, ลำดับตามผู้ผลิตแนะนำ, log, ทำความสะอาด, รายงานความเข้ากันได้ — [คู่มือ](../docs/windows-driver-runtime-manager/README_TH.md) |
+| [windows-driver-runtime-manager](../skills/windows-driver-runtime-manager/SKILL.md) | ตรวจเครื่อง Windows ตรวจ/อัปเดตไดรเวอร์ ติดตั้งรันไทม์สำหรับเกมและงาน ติดตั้งไฟล์ไดรเวอร์ทุกรูปแบบ | หน้าต่าง GUI ติ๊กเลือก (PowerShell + WPF), อัปเดตจากผู้ผลิตก่อนแล้วจึง WHQL ที่ใหม่กว่า, ลำดับตามผู้ผลิตแนะนำ, log, ทำความสะอาด, รายงานความเข้ากันได้, ความหมายรหัสข้อผิดพลาด + วิธีแก้, ชุดข้อมูลดีบัก, ค้นหาไดรเวอร์ใน Microsoft Update Catalog, บันทึก/โหลดชุดที่เลือก — [คู่มือ](../docs/windows-driver-runtime-manager/README_TH.md) · [ข้อบกพร่องและแผนรอบถัดไป](../skills/windows-driver-runtime-manager/references/known-issues.md) |
 | [windows-simulator](../skills/windows-simulator/SKILL.md) | ต้องทดสอบสคริปต์/โปรแกรมบน Windows แต่เครื่องที่ใช้ไม่ใช่ Windows | ตัวเลือก CI runner, VM, Docker, Wine พร้อมไฟล์ตั้งค่าที่รันซ้ำได้ |
 
 ## 2. สร้างโปรแกรมและเพิ่มฟีเจอร์

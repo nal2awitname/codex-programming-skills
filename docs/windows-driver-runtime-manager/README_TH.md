@@ -30,6 +30,16 @@
 แถบล่าง: สร้างจุดคืนค่าก่อนติดตั้ง, สำรองไดรเวอร์เดิม, รีสตาร์ทหลัง BIOS/ชิปเซ็ตแล้วทำต่ออัตโนมัติ, รีสตาร์ทเมื่อเสร็จ,
 อนุญาตไฟล์ที่ไม่มีลายเซ็น, โหมดทดลอง (ไม่ติดตั้งจริง — แนะนำให้ลองก่อนครั้งแรก), ปุ่มหยุด (หยุดหลังรายการที่กำลังทำงานจบ)
 
+### เครื่องมือเพิ่มเติม (รุ่น 1.1)
+
+| ตำแหน่ง | ใช้ทำอะไร |
+| --- | --- |
+| คลิกขวาที่อุปกรณ์ในแท็บ 2 | **ค้นหาไดรเวอร์ที่ Microsoft รับรองใน Microsoft Update Catalog** จาก Hardware ID, คัดลอก Hardware ID, ดูรายละเอียด — ไฟล์ .cab ที่ได้ติดตั้งผ่านแท็บ 4 ได้ทันที |
+| คอลัมน์ "วิธีแก้" | คำแนะนำสำหรับอุปกรณ์ที่มีปัญหาหรือไดรเวอร์ไม่มีลายเซ็น |
+| ปุ่ม "บันทึกชุดที่เลือก" / "โหลดชุดที่เลือก" | เก็บรายการที่ติ๊กและตัวเลือกทั้งหมดเป็นไฟล์ .json แล้วใช้ซ้ำกับเครื่องอื่น |
+| แท็บ 6 > "รวบรวมข้อมูลดีบัก (zip)" | รวม log รายงาน Event Log และ log การติดตั้งไดรเวอร์ของ Windows เป็นไฟล์เดียว (ซ่อนชื่อเครื่อง ชื่อผู้ใช้ Serial แล้ว) ส่งให้ผู้ช่วยแก้ปัญหาได้ |
+| ผลติดตั้งที่ล้มเหลว | แสดงความหมายของรหัสข้อผิดพลาดและวิธีแก้เป็นภาษาไทย ทั้งในหน้าต่าง log และรายงาน |
+
 ## ลำดับการทำงานที่โปรแกรมใช้
 
 1. เตรียมระบบ (winget) และสร้างจุดคืนค่า
@@ -67,11 +77,19 @@ powershell -ExecutionPolicy Bypass -File .\DriverRuntimeManager.ps1 -Mode Instal
 powershell -ExecutionPolicy Bypass -File .\DriverRuntimeManager.ps1 -Mode Install -Preset gaming -IncludeOem -IncludeWindowsUpdateDrivers -Files "D:\Drivers\chipset.zip;D:\Drivers\lan" -Reboot
 
 # ติดตั้งเฉพาะรายการ (id จากแคตตาล็อก คั่นด้วย ,)
-powershell -ExecutionPolicy Bypass -File .\DriverRuntimeManager.ps1 -Mode Install -Preset none -Items "vc14-x64,vc14-x86,directx-jun2010"
+powershell -ExecutionPolicy Bypass -File .\DriverRuntimeManager.ps1 -Mode Install -Items "vc14-x64,vc14-x86,directx-jun2010"
+
+# ใช้ชุดที่บันทึกไว้จากหน้าต่าง หรือบันทึกชุดจากโหมดคำสั่ง
+powershell -ExecutionPolicy Bypass -File .\DriverRuntimeManager.ps1 -Mode Install -SelectionProfile .\gaming-pc.json
+powershell -ExecutionPolicy Bypass -File .\DriverRuntimeManager.ps1 -Mode Install -Preset gaming -DryRun -ExportProfile .\gaming-pc.json
+
+# รวบรวมข้อมูลดีบัก 48 ชั่วโมงล่าสุดเป็นไฟล์ zip
+powershell -ExecutionPolicy Bypass -File .\DriverRuntimeManager.ps1 -Mode Diagnose -SinceHours 48
 ```
 
-ตัวเลือกอื่น: `-NoRestorePoint`, `-NoCleanup`, `-AllowUnsigned`, `-Root <โฟลเดอร์เก็บ log>`, `-Resume`, `-ShowConsole`
-รหัสออก: 0 = ไม่มีรายการล้มเหลว, 1 = มีรายการล้มเหลว (ดูรายงาน)
+ตัวเลือกอื่น: `-NoRestorePoint`, `-NoCleanup`, `-AllowUnsigned`, `-Root <โฟลเดอร์เก็บ log>`, `-Resume`, `-ShowConsole`, `-IncludeIdentifiers` (ใส่ Serial ในชุดดีบัก)
+ระบุ `-Items` โดยไม่ระบุ `-Preset` จะติดตั้งเฉพาะรายการที่ระบุ · ตัวเปิด `.cmd` ข้าม `pause` ได้ด้วยตัวแปร `DRM_NO_PAUSE=1`
+รหัสออก: 0 = ไม่มีรายการล้มเหลว, 1 = มีรายการล้มเหลว (ดูรายงาน), 3 = มีโปรแกรมนี้ทำงานอยู่แล้ว
 
 ## ไฟล์ log และรายงาน
 
@@ -90,6 +108,11 @@ powershell -ExecutionPolicy Bypass -File .\DriverRuntimeManager.ps1 -Mode Instal
 | อุปกรณ์ยังมีปัญหาหลังติดตั้ง | ดับเบิลคลิกอุปกรณ์เพื่อดู Hardware ID แล้วค้นไดรเวอร์จากเว็บผู้ผลิตเครื่อง/ชิ้นส่วน หรือรีสตาร์ทก่อน (รหัส 14) |
 | ต้องการยกเลิกการรีสตาร์ทอัตโนมัติ | รัน `shutdown /a` ภายใน 60 วินาที |
 | ติดตั้งแล้วเครื่องมีปัญหา | ใช้ System Restore คืนค่าไปจุดที่โปรแกรมสร้างไว้ก่อนติดตั้ง |
+| ไม่รู้ว่ารหัสข้อผิดพลาดหมายถึงอะไร | ดูคอลัมน์สถานะ/รายงานส่วน "วิธีแก้" หรือบรรทัด `คำแนะนำ:` ใน log ส่วนผลลัพธ์เต็มของคำสั่งอยู่ที่ `Logs\Output_*.txt` |
+| ต้องส่งข้อมูลให้คนช่วยแก้ | แท็บ 6 > รวบรวมข้อมูลดีบัก (zip) แล้วส่งไฟล์ zip ที่ได้ |
+| ขึ้น "มี Driver & Runtime Manager ทำงานอยู่แล้ว" | ปิดหน้าต่าง/การติดตั้งเดิมก่อน (ป้องกันการติดตั้งชนกัน) |
+
+ข้อบกพร่องที่รู้แล้วและแผนแก้รอบถัดไปอยู่ที่ [known-issues.md](../../skills/windows-driver-runtime-manager/references/known-issues.md) · ประวัติรุ่น [CHANGELOG.md](../../skills/windows-driver-runtime-manager/CHANGELOG.md)
 
 ## ข้อจำกัดที่ควรรู้
 

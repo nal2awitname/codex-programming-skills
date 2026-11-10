@@ -9,6 +9,7 @@
     โหมด Scan: ตรวจระบบอย่างละเอียดแล้วออกรายงาน HTML/JSON (เพิ่ม -CheckUpdates เพื่อตรวจอัปเดตด้วย)
     โหมด Install: ติดตั้งแบบไม่มีหน้าต่างตามชุด/รายการที่ระบุ
     โหมด SelfTest: ตรวจแคตตาล็อก โมดูล และหน้าต่าง XAML โดยไม่แตะระบบ
+    โหมด Diagnose: รวบรวมข้อมูลดีบัก (log, setupapi.dev.log, Event Log, Driver Store) เป็นไฟล์ zip ที่ซ่อนข้อมูลระบุตัวตนแล้ว
 
 .EXAMPLE
     .\Start-DriverRuntimeManager.cmd
@@ -16,10 +17,14 @@
     powershell -ExecutionPolicy Bypass -File .\DriverRuntimeManager.ps1 -Mode Scan -CheckUpdates
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\DriverRuntimeManager.ps1 -Mode Install -Preset gaming -IncludeOem -IncludeWindowsUpdateDrivers -DryRun
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File .\DriverRuntimeManager.ps1 -Mode Install -SelectionProfile .\gaming-pc.json
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File .\DriverRuntimeManager.ps1 -Mode Diagnose -SinceHours 48
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('Gui', 'Scan', 'Install', 'SelfTest')][string]$Mode = 'Gui',
+    [ValidateSet('Gui', 'Scan', 'Install', 'SelfTest', 'Diagnose')][string]$Mode = 'Gui',
     [ValidateSet('recommended', 'gaming', 'work', 'all', 'none')][string]$Preset = 'recommended',
     [string[]]$Items = @(),
     [string[]]$Files = @(),
@@ -34,6 +39,11 @@ param(
     [switch]$Resume,
     [switch]$NoElevate,
     [switch]$ShowConsole,
+    [switch]$HideConsole,
+    [string]$SelectionProfile,
+    [string]$ExportProfile,
+    [int]$SinceHours = 24,
+    [switch]$IncludeIdentifiers,
     [string]$Root,
     [string]$CatalogPath,
     [string]$LauncherPath,
@@ -58,15 +68,8 @@ Import-Module $ModulePath -Force -DisableNameChecking
 # สิทธิ์ Administrator และ STA
 # ---------------------------------------------------------------------------
 function Get-RelaunchArguments {
-    $list = New-Object System.Collections.Generic.List[string]
-    $list.Add('-NoProfile'); $list.Add('-ExecutionPolicy'); $list.Add('Bypass'); $list.Add('-STA'); $list.Add('-File'); $list.Add(('"{0}"' -f $PSCommandPath))
-    foreach ($k in $script:BoundParams.Keys) {
-        $v = $script:BoundParams[$k]
-        if ($v -is [switch] -or $v -is [bool]) { if ([bool]$v) { $list.Add("-$k") } }
-        elseif ($v -is [array]) { if ($v.Count) { $list.Add("-$k"); $list.Add((($v | ForEach-Object { '"{0}"' -f $_ }) -join ',')) } }
-        else { $list.Add("-$k"); $list.Add(('"{0}"' -f $v)) }
-    }
-    return ($list -join ' ')
+    # โหมดคำสั่งเปิดหน้าต่างใหม่ด้วย -NoExit เพื่อให้อ่านผลได้หลังทำงานเสร็จ
+    ConvertTo-DrmArgumentList -BoundParameters $script:BoundParams -ScriptPath $PSCommandPath -NoExit:($Mode -notin 'Gui', 'SelfTest')
 }
 $script:BoundParams = $PSBoundParameters
 
@@ -80,6 +83,18 @@ if ($Mode -eq 'Gui' -and [Threading.Thread]::CurrentThread.ApartmentState -ne 'S
     $exe = (Get-Process -Id $PID).Path
     Start-Process -FilePath $exe -ArgumentList (Get-RelaunchArguments) | Out-Null
     exit 0
+}
+
+# เปิดได้ทีละหน้าต่าง/ทีละการติดตั้ง เพื่อไม่ให้สองรอบเขียนทับกันหรือรันตัวติดตั้งชนกัน
+if ($Mode -in 'Gui', 'Install' -and (Test-DrmIsWindows)) {
+    $createdNew = $false
+    try { $script:InstanceMutex = New-Object System.Threading.Mutex($true, 'Global\DriverRuntimeManager.Instance', [ref]$createdNew) } catch { $createdNew = $true }
+    if (-not $createdNew) {
+        $msg = 'มี Driver & Runtime Manager ทำงานอยู่แล้ว — ปิดหน้าต่าง/การติดตั้งเดิมก่อนแล้วลองใหม่'
+        Write-Host $msg -ForegroundColor Yellow
+        if ($Mode -eq 'Gui') { try { Add-Type -AssemblyName PresentationFramework; [void][Windows.MessageBox]::Show($msg, 'Driver & Runtime Manager') } catch { } }
+        exit 3
+    }
 }
 
 function Get-RunOptions {
@@ -103,7 +118,7 @@ function Get-RunOptions {
 # โหมดคำสั่ง (ไม่มีหน้าต่าง)
 # ---------------------------------------------------------------------------
 function Invoke-HeadlessScan {
-    $session = Initialize-DrmSession -Root $Root -DryRun:$DryRun -Console
+    $session = Initialize-DrmSession -Root $Root -DryRun:$DryRun -Console -NoBrowser
     $catalog = Get-DrmCatalog -Path $CatalogPath
     $scan = Invoke-DrmScan -Catalog $catalog
     $upd = $null
@@ -119,7 +134,7 @@ function Invoke-HeadlessScan {
 }
 
 function Invoke-HeadlessInstall {
-    $session = Initialize-DrmSession -Root $Root -DryRun:$DryRun -Console
+    $session = Initialize-DrmSession -Root $Root -DryRun:$DryRun -Console -NoBrowser
     $catalog = Get-DrmCatalog -Path $CatalogPath
     Set-DrmCatalogCached $catalog
     if ($Resume) {
@@ -129,29 +144,70 @@ function Invoke-HeadlessInstall {
         $sum = Invoke-DrmInstallPlan -Plan @($state.Items) -Options $state.Options -Catalog $catalog -Snapshot $state.Snapshot -ResumeAttempt ([int]$state.Attempt) -LauncherPath $LauncherPath
         return $(if ($sum.Failed) { 1 } else { 0 })
     }
+    # ชุดที่บันทึกไว้ (-SelectionProfile) รวมกับพารามิเตอร์ที่ระบุในบรรทัดคำสั่ง
+    $useOem = [bool]$IncludeOem; $useWu = [bool]$IncludeWindowsUpdateDrivers
+    $ids = @($Items); $fileList = @($Files); $fileArgs = @{}; $vendorNames = @()
+    $options = Get-RunOptions
+    $effectivePreset = Resolve-DrmPreset -Preset $Preset -PresetSpecified $PSBoundParameters.ContainsKey('Preset') -Items $Items
+    if ($SelectionProfile) {
+        $sel = Read-DrmSelectionProfile -Path $SelectionProfile
+        Write-DrmLog ("ใช้ชุดที่เลือกจาก {0} ({1} รันไทม์, ไฟล์ {2})" -f $SelectionProfile, @($sel.runtimes).Count, @($sel.files).Count) -Level Step
+        $ids += @($sel.runtimes)
+        if ($sel.includeOem) { $useOem = $true }
+        if ($sel.includeWindowsUpdateDrivers) { $useWu = $true }
+        $vendorNames = @($sel.vendorTools)
+        foreach ($f in @($sel.files)) { $fileList += [string]$f.path; if ($f.args) { $fileArgs[([string]$f.path).ToLowerInvariant()] = [string]$f.args } }
+        if ($sel.options) { foreach ($pr in $sel.options.PSObject.Properties) { if ($options.PSObject.Properties[$pr.Name]) { $options.($pr.Name) = $pr.Value } } }
+        if (-not $PSBoundParameters.ContainsKey('Preset')) { $effectivePreset = 'none' }
+    }
     $scan = Invoke-DrmScan -Catalog $catalog
     $planItems = New-Object System.Collections.Generic.List[object]
-    if ($IncludeOem -and $scan.OemProfile.Vendor -ne 'Other') { $planItems.Add((New-DrmPlanItemFromOem -OemProfile $scan.OemProfile)) }
-    foreach ($f in $Files) {
+    if ($useOem -and $scan.OemProfile.Vendor -ne 'Other') { $planItems.Add((New-DrmPlanItemFromOem -OemProfile $scan.OemProfile)) }
+    foreach ($v in @($scan.VendorTools | Where-Object { $vendorNames -contains $_.Vendor })) { $planItems.Add((New-DrmPlanItemFromVendor -Vendor $v)) }
+    foreach ($f in $fileList) {
         foreach ($info in (Get-DrmInstallerInfo -Path $f -Catalog $catalog)) {
             if ($info.Kind -eq 'Unknown') { Write-DrmLog ("ข้ามไฟล์ที่ไม่รู้จักชนิด: {0}" -f $info.Path) -Level Warn; continue }
+            if ($fileArgs.ContainsKey($f.ToLowerInvariant())) { $info.Args = $fileArgs[$f.ToLowerInvariant()] }
             $planItems.Add((New-DrmPlanItemFromLocal -Info $info))
         }
     }
-    if ($IncludeWindowsUpdateDrivers) {
+    $known = @($scan.Runtimes | ForEach-Object { $_.Id })
+    foreach ($missing in @($ids | Where-Object { $known -notcontains $_ } | Select-Object -Unique)) { Write-DrmLog ("ไม่พบรายการ '{0}' สำหรับเครื่องนี้ (สถาปัตยกรรมไม่ตรงหรือไม่มีในแคตตาล็อก) — ข้าม" -f $missing) -Level Warn }
+    if ($useWu) {
         $wuList = Find-DrmWindowsUpdateDrivers -Devices $scan.Devices
         foreach ($w in @($wuList | Where-Object { $_.Selected })) { $planItems.Add((New-DrmPlanItemFromWindowsUpdate -Driver $w)) }
     }
-    foreach ($r in (Select-DrmRuntimeByPreset -Runtimes $scan.Runtimes -Preset $Preset -Ids $Items)) { $planItems.Add((New-DrmPlanItemFromRuntime -Runtime $r)) }
+    $pickedRuntimes = @(Select-DrmRuntimeByPreset -Runtimes $scan.Runtimes -Preset $effectivePreset -Ids $ids)
+    foreach ($r in $pickedRuntimes) { $planItems.Add((New-DrmPlanItemFromRuntime -Runtime $r)) }
+    if ($ExportProfile) {
+        $exportFiles = @($fileList | ForEach-Object { [pscustomobject]@{ path = $_; args = $(if ($fileArgs.ContainsKey($_.ToLowerInvariant())) { $fileArgs[$_.ToLowerInvariant()] } else { '' }) } })
+        $sel = New-DrmSelectionProfile -RuntimeIds @($pickedRuntimes | ForEach-Object { $_.Id }) -IncludeOem $useOem -IncludeWindowsUpdate $useWu -VendorTools $vendorNames -Files $exportFiles -Options $options -Name ('บันทึกจากโหมดคำสั่ง ' + $env:COMPUTERNAME)
+        [void](Save-DrmSelectionProfile -Selection $sel -Path $ExportProfile)
+        Write-Host ("บันทึกชุดที่เลือก: {0}" -f $ExportProfile) -ForegroundColor Green
+    }
     if ($planItems.Count -eq 0) { Write-Host 'ไม่มีรายการให้ติดตั้ง' -ForegroundColor Yellow; return 0 }
     $plan = New-DrmPlan -Items $planItems.ToArray()
     Write-Host ''
     Write-Host '=== ลำดับการติดตั้ง ===' -ForegroundColor Cyan
     $plan | Format-Table Sequence, PhaseName, Name -AutoSize | Out-String -Width 200 | Write-Host
-    $sum = Invoke-DrmInstallPlan -Plan $plan -Options (Get-RunOptions) -Catalog $catalog -System $scan.System -DevicesBefore $scan.Devices -OemProfile $scan.OemProfile -LauncherPath $LauncherPath
+    $sum = Invoke-DrmInstallPlan -Plan $plan -Options $options -Catalog $catalog -System $scan.System -DevicesBefore $scan.Devices -OemProfile $scan.OemProfile -LauncherPath $LauncherPath
+    foreach ($bad in @($sum.Results | Where-Object { $_.Result.Status -eq 'Failed' })) {
+        Write-Host ("ล้มเหลว: {0} — {1}" -f $bad.Name, $(if ($bad.Result.Advice) { $bad.Result.Advice } else { $bad.Result.Detail })) -ForegroundColor Red
+    }
     if ($sum.Checks) { $sum.Checks | Format-Table Area, Check, Status, Detail -AutoSize -Wrap | Out-String -Width 220 | Write-Host }
     if ($sum.Report) { Write-Host ("รายงาน: {0}" -f $sum.Report.Html) -ForegroundColor Green }
     return $(if ($sum.Failed) { 1 } else { 0 })
+}
+
+function Invoke-HeadlessDiagnose {
+    $session = Initialize-DrmSession -Root $Root -Console -NoBrowser
+    $catalog = Get-DrmCatalog -Path $CatalogPath
+    Set-DrmCatalogCached $catalog
+    $d = New-DrmDiagnosticsBundle -SinceHours $SinceHours -Catalog $catalog -IncludeIdentifiers:$IncludeIdentifiers
+    Write-Host ''
+    Write-Host ("ข้อมูลดีบัก: {0}" -f $d.Path) -ForegroundColor Green
+    Write-Host ("ไฟล์ {0} รายการ ({1})" -f @($d.Files).Count, $(if ($d.Redacted) { 'ซ่อนชื่อเครื่อง ชื่อผู้ใช้ และ Serial แล้ว' } else { 'มีข้อมูลระบุตัวตน — ตรวจก่อนส่งต่อ' })) -ForegroundColor Green
+    return 0
 }
 
 # ---------------------------------------------------------------------------
@@ -213,6 +269,8 @@ $script:Xaml = @'
           <Button x:Name="BtnScan" Content="สแกนระบบใหม่"/>
           <Button x:Name="BtnCheck" Content="ตรวจหาอัปเดต"/>
           <Button x:Name="BtnReport" Content="บันทึกรายงาน"/>
+          <Button x:Name="BtnSaveProfile" Content="บันทึกชุดที่เลือก"/>
+          <Button x:Name="BtnLoadProfile" Content="โหลดชุดที่เลือก"/>
         </StackPanel>
         <StackPanel>
           <TextBlock Text="ตัวจัดการไดรเวอร์และรันไทม์" Foreground="White" FontSize="19" FontWeight="SemiBold"/>
@@ -269,7 +327,15 @@ $script:Xaml = @'
               <DataGridTextColumn Header="วันที่" Binding="{Binding Date}" Width="85"/>
               <DataGridTextColumn Header="การรับรอง" Binding="{Binding Cert}" Width="200"/>
               <DataGridTextColumn Header="สถานะ" Binding="{Binding Status}" Width="1.2*"/>
+              <DataGridTextColumn Header="วิธีแก้" Binding="{Binding Note}" Width="1.5*"/>
             </DataGrid.Columns>
+            <DataGrid.ContextMenu>
+              <ContextMenu>
+                <MenuItem x:Name="MenuCatalog" Header="ค้นหาไดรเวอร์ที่ Microsoft รับรองใน Microsoft Update Catalog"/>
+                <MenuItem x:Name="MenuCopyHwid" Header="คัดลอก Hardware ID"/>
+                <MenuItem x:Name="MenuDetails" Header="รายละเอียดไดรเวอร์"/>
+              </ContextMenu>
+            </DataGrid.ContextMenu>
           </DataGrid>
           <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" Background="#D5DCE4"/>
           <DockPanel Grid.Row="3" Margin="0,6,0,6">
@@ -378,6 +444,7 @@ $script:Xaml = @'
           <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
             <Button x:Name="BtnOpenLogs" Content="เปิดโฟลเดอร์ Log/รายงาน"/>
             <Button x:Name="BtnOpenReport" Content="เปิดรายงานล่าสุด"/>
+            <Button x:Name="BtnDiag" Content="รวบรวมข้อมูลดีบัก (zip)"/>
             <TextBlock x:Name="TxtLogPath" VerticalAlignment="Center" Foreground="#4A5A6A" Margin="8,0,0,0"/>
           </StackPanel>
           <TextBox x:Name="LogBox" Grid.Row="1" IsReadOnly="True" FontFamily="Consolas, Leelawadee UI" FontSize="12" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" TextWrapping="NoWrap" Background="#0F1720" Foreground="#D7E3EE"/>
@@ -418,7 +485,8 @@ $script:ControlNames = @(
     'BtnUpdRecommended', 'BtnUpdAll', 'BtnUpdNone', 'UpdGrid', 'BtnPresetRecommended', 'BtnPresetGaming', 'BtnPresetWork', 'BtnPresetAll',
     'BtnPresetNone', 'RtGrid', 'BtnAddFiles', 'BtnAddFolder', 'BtnRemoveFiles', 'FileGrid', 'ChkCleanWork', 'ChkCleanVendor', 'ChkCleanTemp',
     'ChkCleanWu', 'ChkRemoveOld', 'TxtOldCount', 'ChkComponent', 'BtnOpenLogs', 'BtnOpenReport', 'TxtLogPath', 'LogBox', 'BtnInstall', 'BtnStop',
-    'ChkRestorePoint', 'ChkBackup', 'ChkResume', 'ChkReboot', 'ChkUnsigned', 'ChkDryRun', 'TxtSummary', 'Progress', 'TxtStatus'
+    'ChkRestorePoint', 'ChkBackup', 'ChkResume', 'ChkReboot', 'ChkUnsigned', 'ChkDryRun', 'TxtSummary', 'Progress', 'TxtStatus',
+    'BtnSaveProfile', 'BtnLoadProfile', 'BtnDiag', 'MenuCatalog', 'MenuCopyHwid', 'MenuDetails'
 )
 
 $script:GridItemCode = @'
@@ -536,6 +604,12 @@ $cat = Get-DrmCatalog -Path $P.CatalogPath
 $sum = Invoke-DrmInstallPlan -Plan $P.Plan -Options $P.Options -Catalog $cat -System $P.System -DevicesBefore $P.Devices -OemProfile $P.OemProfile -Snapshot $P.Snapshot -ResumeAttempt $P.ResumeAttempt -LauncherPath $P.LauncherPath
 Send-DrmEvent -Type 'InstallResult' -Data @{ Summary = $sum }
 '@
+$script:DiagBody = @'
+$cat = Get-DrmCatalog -Path $P.CatalogPath
+Set-DrmCatalogCached $cat
+$d = New-DrmDiagnosticsBundle -SinceHours $P.SinceHours -Catalog $cat -Devices $P.Devices -System $P.System -IncludeIdentifiers:$P.IncludeIdentifiers
+Send-DrmEvent -Type 'DiagResult' -Data @{ Result = $d }
+'@
 $script:FilesBody = @'
 $cat = Get-DrmCatalog -Path $P.CatalogPath
 foreach ($path in $P.Paths) {
@@ -581,8 +655,9 @@ function Test-UiBusy { return [bool]$script:Workers['main'] }
 
 function Update-BusyState {
     $busy = Test-UiBusy
-    foreach ($n in 'BtnScan', 'BtnCheck', 'BtnInstall') { $script:Ui[$n].IsEnabled = -not $busy }
+    foreach ($n in 'BtnScan', 'BtnCheck', 'BtnInstall', 'BtnLoadProfile') { $script:Ui[$n].IsEnabled = -not $busy }
     $script:Ui.BtnStop.IsEnabled = $busy
+    $script:Ui.BtnDiag.IsEnabled = -not [bool]$script:Workers['diag']
     if (-not $busy) { $script:Ui.Progress.IsIndeterminate = $false }
 }
 
@@ -640,18 +715,21 @@ function Show-ScanResult {
     foreach ($d in $Scan.Devices) {
         $lvl = $d.Level
         $status = if ($d.ProblemText) { $d.ProblemText } elseif (-not $d.Present) { 'ไม่ได้เชื่อมต่อ' } else { 'ปกติ' }
-        $script:Devices.Add((New-GridItem @{ Id = $d.DeviceId; Group = $d.OrderGroup; Name = $d.Name; ClassName = $d.Class; Vendor = $(if ($d.DriverProvider) { $d.DriverProvider } else { $d.VendorName }); Installed = $d.DriverVersion; Date = $d.DriverDate; Cert = $d.CertText; Status = $status; Level = $lvl; Data = $d }))
+        $script:Devices.Add((New-GridItem @{ Id = $d.DeviceId; Group = $d.OrderGroup; Name = $d.Name; ClassName = $d.Class; Vendor = $(if ($d.DriverProvider) { $d.DriverProvider } else { $d.VendorName }); Installed = $d.DriverVersion; Date = $d.DriverDate; Cert = $d.CertText; Status = $status; Note = [string](Get-DrmProp $d 'Advice' ''); Level = $lvl; Data = $d }))
     }
     Update-DeviceFilter
     # รายการอัปเดตจากผู้ผลิต (OEM/ชิ้นส่วน) — Windows Update จะเพิ่มหลังตรวจหาอัปเดต
     $keepWu = @($script:Updates | Where-Object { $_.Kind -eq 'WuDriver' })
+    # สแกนซ้ำ (เช่นหลังติดตั้ง) ต้องไม่ล้างสิ่งที่ผู้ใช้ติ๊กไว้
+    $prevUpd = @{}; foreach ($i in $script:Updates) { $prevUpd[$i.Id] = $i.Selected }
+    $prevRt = @{}; foreach ($i in $script:Runtimes) { $prevRt[$i.Id] = $i.Selected }
     $script:Updates.Clear()
     $oem = $Scan.OemProfile
     if ($oem.Vendor -ne 'Other') {
-        $script:Updates.Add((New-GridItem @{ Id = 'oem'; Kind = 'OemTool'; Source = ('1) ผู้ผลิตเครื่อง: ' + $oem.Vendor); Name = $oem.Name; ClassName = 'BIOS ชิปเซ็ต ไดรเวอร์ เฟิร์มแวร์'; Comparison = $(if ($oem.Automated) { 'อัตโนมัติตามลำดับของผู้ผลิต' } else { 'เปิดเครื่องมือ/หน้าเว็บผู้ผลิต' }); Status = $oem.Note; Selected = [bool]$oem.Automated; Order = 1; Data = $oem }))
+        $script:Updates.Add((New-GridItem @{ Id = 'oem'; Kind = 'OemTool'; Source = ('1) ผู้ผลิตเครื่อง: ' + $oem.Vendor); Name = $oem.Name; ClassName = 'BIOS ชิปเซ็ต ไดรเวอร์ เฟิร์มแวร์'; Comparison = $(if ($oem.Automated) { 'อัตโนมัติตามลำดับของผู้ผลิต' } else { 'เปิดเครื่องมือ/หน้าเว็บผู้ผลิต' }); Status = $oem.Note; Selected = $(if ($prevUpd.ContainsKey('oem')) { $prevUpd['oem'] } else { [bool]$oem.Automated }); Order = 1; Data = $oem }))
     }
     foreach ($v in $Scan.VendorTools) {
-        $script:Updates.Add((New-GridItem @{ Id = ('vendor:' + $v.Vendor); Kind = 'VendorTool'; Source = ('2) ผู้ผลิตชิ้นส่วน: ' + $v.Vendor); Name = $v.Name; ClassName = (($v.Devices | Select-Object -First 2) -join '; '); Comparison = 'เครื่องมือ/หน้าดาวน์โหลดทางการ'; Status = $v.Note; Selected = [bool]$v.Default; Order = 2; Data = $v }))
+        $script:Updates.Add((New-GridItem @{ Id = ('vendor:' + $v.Vendor); Kind = 'VendorTool'; Source = ('2) ผู้ผลิตชิ้นส่วน: ' + $v.Vendor); Name = $v.Name; ClassName = (($v.Devices | Select-Object -First 2) -join '; '); Comparison = 'เครื่องมือ/หน้าดาวน์โหลดทางการ'; Status = $v.Note; Selected = $(if ($prevUpd.ContainsKey('vendor:' + $v.Vendor)) { $prevUpd['vendor:' + $v.Vendor] } else { [bool]$v.Default }); Order = 2; Data = $v }))
     }
     foreach ($w in $keepWu) { $script:Updates.Add($w) }
     $script:Runtimes.Clear()
@@ -659,7 +737,8 @@ function Show-ScanResult {
         $lvl = if (-not $r.Installed) { 'warn' } elseif ($r.State -eq 'มีรุ่นใหม่กว่า') { 'warn' } else { '' }
         $script:Runtimes.Add((New-GridItem @{ Id = $r.Id; Kind = 'Catalog'; Group = $r.Group; Name = $r.Name; Comparison = $r.State; Installed = $r.InstalledVersion; Available = $r.LatestVersion; Source = $r.Source; Note = $r.Note; Level = $lvl; Order = $r.Order; Data = $r }))
     }
-    Set-RuntimePreset 'recommended'
+    if ($prevRt.Count -gt 0) { foreach ($i in $script:Runtimes) { $i.Selected = ($prevRt.ContainsKey($i.Id) -and $prevRt[$i.Id]) } }
+    else { Set-RuntimePreset 'recommended' }
     $script:Ui.TxtOldCount.Text = $(if (@($Scan.OldPackages).Count) { '  (พบ {0} แพ็กเกจ)' -f @($Scan.OldPackages).Count } else { '  (ไม่พบ)' })
 }
 
@@ -689,10 +768,11 @@ function Show-UpdateResult {
         if ($os.Status -eq 'UpToDate') { $oemItem.Selected = $false; $oemItem.Level = 'ok' }
         elseif ($os.Status -eq 'Found') { $oemItem.Selected = $true; $oemItem.Level = 'warn' }
     }
-    foreach ($old in @($script:Updates | Where-Object { $_.Kind -eq 'WuDriver' })) { [void]$script:Updates.Remove($old) }
+    $prevWu = @{}
+    foreach ($old in @($script:Updates | Where-Object { $_.Kind -eq 'WuDriver' })) { $prevWu[$old.Id] = $old.Selected; [void]$script:Updates.Remove($old) }
     foreach ($w in @($Update.WindowsUpdate)) {
         $lvl = if ($w.Comparison -in 'Missing', 'Newer') { 'warn' } else { '' }
-        $script:Updates.Add((New-GridItem @{ Id = $w.Id; Kind = 'WuDriver'; Source = '3) Windows Update (Microsoft รับรอง)'; Name = $w.Title; ClassName = $(if ($w.DeviceName) { $w.DeviceName } else { $w.DriverClass }); Installed = $w.InstalledVersion; Available = ('{0} ({1})' -f $w.OfferedVersion, $w.OfferedDate); Comparison = $w.ComparisonText; Status = ('{0} MB' -f $w.SizeMB); Selected = [bool]$w.Selected; Level = $lvl; Order = 3; Data = $w }))
+        $script:Updates.Add((New-GridItem @{ Id = $w.Id; Kind = 'WuDriver'; Source = '3) Windows Update (Microsoft รับรอง)'; Name = $w.Title; ClassName = $(if ($w.DeviceName) { $w.DeviceName } else { $w.DriverClass }); Installed = $w.InstalledVersion; Available = ('{0} ({1})' -f $w.OfferedVersion, $w.OfferedDate); Comparison = $w.ComparisonText; Status = ('{0} MB' -f $w.SizeMB); Selected = $(if ($prevWu.ContainsKey($w.Id)) { $prevWu[$w.Id] } else { [bool]$w.Selected }); Level = $lvl; Order = 3; Data = $w }))
     }
     $n = @($Update.WindowsUpdate).Count
     $sel = @($Update.WindowsUpdate | Where-Object { $_.Selected }).Count
@@ -712,6 +792,8 @@ function Add-UiFileInfos {
     foreach ($info in @($Infos)) {
         if (Find-UiItem $info.Id) { continue }
         $lvl = if (-not $info.SignatureValid) { 'error' } elseif ($info.CertLevel -in 'Vendor', 'Attested') { 'warn' } else { '' }
+        $key = ([string]$info.Path).ToLowerInvariant()
+        if ($script:PendingFileArgs -and $script:PendingFileArgs.ContainsKey($key)) { $info.Args = $script:PendingFileArgs[$key]; $info.Selected = $true; $script:PendingFileArgs.Remove($key) }
         $engine = if (-not $info.Args -and $info.Kind -eq 'Exe') { $info.Engine + ' (เปิดหน้าต่างผู้ผลิต)' } else { $info.Engine }
         $script:FilesCol.Add((New-GridItem @{ Id = $info.Id; Kind = $info.KindText; Group = $info.OrderGroup; Name = $info.Name; Engine = $engine; Args = $info.Args; Cert = $info.SignatureText; Path = $info.Path; Selected = [bool]$info.Selected; Level = $lvl; Order = $info.OrderIndex; Data = $info; Status = 'รอติดตั้ง' }))
     }
@@ -728,6 +810,70 @@ function Add-UiPaths {
     if (-not (Start-UiWorker -Slot 'files' -Body $script:FilesBody -Params @{ CatalogPath = $CatalogPath; Paths = $p })) {
         [void][Windows.MessageBox]::Show('กำลังวิเคราะห์ไฟล์ชุดก่อนอยู่ กรุณารอสักครู่', 'Driver & Runtime Manager')
     }
+}
+
+function Get-UiSelectionProfile {
+    $rt = @($script:Runtimes | Where-Object { $_.Selected } | ForEach-Object { $_.Id })
+    $oem = [bool](@($script:Updates | Where-Object { $_.Kind -eq 'OemTool' -and $_.Selected }).Count)
+    $wu = [bool](@($script:Updates | Where-Object { $_.Kind -eq 'WuDriver' -and $_.Selected }).Count)
+    $vendors = @($script:Updates | Where-Object { $_.Kind -eq 'VendorTool' -and $_.Selected } | ForEach-Object { $_.Data.Vendor })
+    $files = @($script:FilesCol | Where-Object { $_.Selected } | ForEach-Object { [pscustomobject]@{ path = $_.Path; args = $_.Args } })
+    New-DrmSelectionProfile -RuntimeIds $rt -IncludeOem $oem -IncludeWindowsUpdate $wu -VendorTools $vendors -Files $files -Options (Get-UiOptions) -Name ('บันทึกจากหน้าต่าง ' + $env:COMPUTERNAME)
+}
+
+$script:OptionChecks = @{
+    CreateRestorePoint = 'ChkRestorePoint'; BackupDrivers = 'ChkBackup'; ResumeAfterReboot = 'ChkResume'; Reboot = 'ChkReboot'; AllowUnsigned = 'ChkUnsigned'
+    CleanVendorFolders = 'ChkCleanVendor'; CleanTemp = 'ChkCleanTemp'; CleanWuCache = 'ChkCleanWu'; RemoveOldDrivers = 'ChkRemoveOld'; ComponentCleanup = 'ChkComponent'
+}
+
+function Set-UiSelectionProfile {
+    param($Selection)
+    $ids = @($Selection.runtimes)
+    foreach ($i in $script:Runtimes) { $i.Selected = ($ids -contains $i.Id) }
+    foreach ($missing in @($ids | Where-Object { $id = $_; -not @($script:Runtimes | Where-Object { $_.Id -eq $id }).Count })) { Add-UiLog ("[ชุดที่เลือก] ไม่พบรายการ '{0}' ในเครื่องนี้ — ข้าม" -f $missing) }
+    foreach ($i in $script:Updates) {
+        switch ($i.Kind) {
+            'OemTool' { $i.Selected = [bool]$Selection.includeOem }
+            'VendorTool' { $i.Selected = (@($Selection.vendorTools) -contains $i.Data.Vendor) }
+            'WuDriver' { $i.Selected = ([bool]$Selection.includeWindowsUpdateDrivers -and [bool]$i.Data.Selected) }
+        }
+    }
+    if ($Selection.options) {
+        foreach ($k in $script:OptionChecks.Keys) { if ($Selection.options.PSObject.Properties[$k]) { $script:Ui[$script:OptionChecks[$k]].IsChecked = [bool]$Selection.options.$k } }
+        if ($Selection.options.PSObject.Properties['KeepDownloads']) { $script:Ui.ChkCleanWork.IsChecked = -not [bool]$Selection.options.KeepDownloads }
+    }
+    if (-not $script:PendingFileArgs) { $script:PendingFileArgs = @{} }
+    $paths = @()
+    foreach ($f in @($Selection.files)) {
+        $path = [string]$f.path
+        if (-not $path -or -not (Test-Path -LiteralPath $path)) { Add-UiLog ("[ชุดที่เลือก] ไม่พบไฟล์ {0} — ข้าม" -f $path); continue }
+        $existing = @($script:FilesCol | Where-Object { $_.Path -eq $path }) | Select-Object -First 1
+        if ($existing) { $existing.Selected = $true; $existing.Args = [string]$f.args }
+        else { $script:PendingFileArgs[$path.ToLowerInvariant()] = [string]$f.args; $paths += $path }
+    }
+    if ($paths.Count) { Add-UiPaths $paths }
+    Update-SelectionSummary
+}
+
+function Open-UiDocument {
+    <# เปิดรายงานผ่าน explorer.exe เพื่อให้เบราว์เซอร์ทำงานด้วยสิทธิ์ผู้ใช้ปกติ ไม่สืบทอดสิทธิ์ Administrator #>
+    param([string]$Path)
+    if (-not $Path) { return }
+    try { Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $Path) } catch { try { Start-Process $Path } catch { } }
+}
+
+function Show-DeviceDetails {
+    param($Device)
+    if (-not $Device) { return }
+    $d = $Device
+    $txt = "อุปกรณ์: {0}`nคลาส: {1}`nผู้ผลิตฮาร์ดแวร์: {2} ({3})`nผู้ให้ไดรเวอร์: {4}`nเวอร์ชัน/วันที่: {5} / {6}`nINF: {7}`nผู้ลงนาม: {8}`nการรับรอง: {9}`nสถานะ: {10}`nวิธีแก้: {11}`nลำดับติดตั้ง: {12}`n`nHardware IDs:`n{13}`n`nค้นหาไดรเวอร์: {14}`nDevice ID: {15}" -f $d.Name, $d.Class, $d.Manufacturer, $d.VendorName, $d.DriverProvider, $d.DriverVersion, $d.DriverDate, $d.InfName, $d.Signer, $d.CertText, $(if ($d.ProblemText) { $d.ProblemText } else { 'ปกติ' }), $(if (Get-DrmProp $d 'Advice') { $d.Advice } else { '-' }), $d.OrderGroup, (($d.HardwareIds | Select-Object -First 6) -join "`n"), (Get-DrmProp $d 'CatalogUrl' ''), $d.DeviceId
+    [void][Windows.MessageBox]::Show($txt, 'รายละเอียดไดรเวอร์')
+}
+
+function Start-UiDiagnostics {
+    $params = @{ CatalogPath = $CatalogPath; SinceHours = $SinceHours; IncludeIdentifiers = [bool]$IncludeIdentifiers
+        Devices = $(if ($script:Scan) { $script:Scan.Devices } else { $null }); System = $(if ($script:Scan) { $script:Scan.System } else { $null }) }
+    if (Start-UiWorker -Slot 'diag' -Body $script:DiagBody -Params $params) { $script:Ui.TxtStatus.Text = 'กำลังรวบรวมข้อมูลดีบัก...' }
 }
 
 function Get-UiOptions {
@@ -818,7 +964,7 @@ function Show-InstallResult {
     if ($Summary.Checks) { Show-Checks $Summary.Checks; $script:Ui.Tabs.SelectedIndex = 0 }
     if ($Summary.Report) { $script:LastReport = $Summary.Report.Html }
     $text = "ติดตั้งเสร็จ: สำเร็จ/เป็นรุ่นล่าสุด {0}, ล้มเหลว {1}`n`nรายงานละเอียด: {2}`nLog: {3}" -f $Summary.Succeeded, $Summary.Failed, $script:LastReport, $script:Session.LogFile
-    if ($script:LastReport -and (Test-Path -LiteralPath $script:LastReport)) { Start-Process $script:LastReport }
+    if ($script:LastReport -and (Test-Path -LiteralPath $script:LastReport)) { Open-UiDocument $script:LastReport }
     if ($Summary.RebootRequired -and -not [bool]$script:Ui.ChkReboot.IsChecked -and -not [bool]$script:Ui.ChkDryRun.IsChecked) {
         $ans = [Windows.MessageBox]::Show($text + "`n`nต้องรีสตาร์ทเพื่อให้ไดรเวอร์/รันไทม์ทำงานสมบูรณ์ — รีสตาร์ทตอนนี้หรือไม่?", 'ติดตั้งเสร็จ', 'YesNo', 'Question')
         if ($ans -eq 'Yes') { & shutdown.exe /r /t 30 /c "Driver & Runtime Manager: รีสตาร์ทเพื่อให้การติดตั้งสมบูรณ์" | Out-Null }
@@ -852,6 +998,14 @@ function Invoke-UiMessage {
             [void][Windows.MessageBox]::Show(("ติดตั้ง BIOS/ชิปเซ็ตแล้ว ผู้ผลิตแนะนำให้รีสตาร์ทก่อนติดตั้งส่วนที่เหลือ`n`nเครื่องจะรีสตาร์ทใน 60 วินาที แล้วโปรแกรมจะเปิดขึ้นมาทำต่ออีก {0} รายการโดยอัตโนมัติ`n(ยกเลิกการรีสตาร์ทได้ด้วยคำสั่ง shutdown /a)" -f $m.Summary.Remaining), 'รีสตาร์ทตามคำแนะนำผู้ผลิต', 'OK', 'Information')
         }
         'WorkerError' { $script:Ui.TxtStatus.Text = 'ข้อผิดพลาด: ' + $m.Message }
+        'DiagResult' {
+            $script:LastDiag = $m.Result.Path
+            $script:Ui.TxtStatus.Text = 'บันทึกข้อมูลดีบักแล้ว: ' + $m.Result.Path
+            if (-not $script:Smoke) {
+                [void][Windows.MessageBox]::Show(("บันทึกข้อมูลดีบักไว้ที่`n{0}`n`nซ่อนชื่อเครื่อง ชื่อผู้ใช้ และ Serial แล้ว ส่งไฟล์นี้ให้ผู้ช่วยแก้ปัญหาได้" -f $m.Result.Path), 'ข้อมูลดีบัก', 'OK', 'Information')
+                try { Start-Process explorer.exe ('/select,"{0}"' -f $m.Result.Path) } catch { }
+            }
+        }
     }
 }
 
@@ -879,7 +1033,19 @@ function Start-SmokeTest {
                 $script:SmokePhase = 'install'
                 return
             }
-            if (($script:SmokePhase -eq 'install' -and $script:SmokeSummary -and -not (Test-UiBusy)) -or $timedOut) {
+            if ($script:SmokePhase -eq 'install' -and $script:SmokeSummary -and -not (Test-UiBusy) -and -not $timedOut) {
+                # บันทึก → ล้าง → โหลดชุดที่เลือก แล้วเทียบจำนวนที่เลือก
+                $before = @($script:Runtimes | Where-Object { $_.Selected }).Count
+                $tmp = Join-Path $script:Session.ReportDir 'smoke-selection.json'
+                [void](Save-DrmSelectionProfile -Selection (Get-UiSelectionProfile) -Path $tmp)
+                Set-RuntimePreset 'none'
+                Set-UiSelectionProfile (Read-DrmSelectionProfile -Path $tmp)
+                $script:SmokeProfile = @{ Before = $before; After = @($script:Runtimes | Where-Object { $_.Selected }).Count; Path = $tmp }
+                Start-UiDiagnostics
+                $script:SmokePhase = 'diag'
+                return
+            }
+            if (($script:SmokePhase -eq 'diag' -and $script:LastDiag -and -not $script:Workers['diag']) -or $timedOut) {
                 $script:SmokeTimer.Stop()
                 $results = @(if ($script:SmokeSummary) { $script:SmokeSummary.Results } else { @() })
                 $out = [ordered]@{
@@ -889,6 +1055,9 @@ function Start-SmokeTest {
                     Selection = $script:Ui.TxtSummary.Text; PlanItems = @($script:SmokePlan).Count; Results = $results.Count
                     Failed = @($results | Where-Object { $_.Result.Status -eq 'Failed' } | ForEach-Object { '{0}: {1}' -f $_.Name, $_.Result.Detail })
                     UiErrors = $script:UiErrors; Report = $script:LastReport; Log = $script:Session.LogFile
+                    ProfileBefore = $(if ($script:SmokeProfile) { $script:SmokeProfile.Before } else { -1 }); ProfileAfter = $(if ($script:SmokeProfile) { $script:SmokeProfile.After } else { -2 })
+                    Diagnostics = $script:LastDiag; Version = (Get-DrmVersion); Title = $script:Ui.Window.Title
+                    AdviceColumnRows = @($script:Devices | Where-Object { $_.Note }).Count
                 }
                 $path = if ($SmokeTestReport) { $SmokeTestReport } else { Join-Path $script:Session.ReportDir 'gui-smoke.json' }
                 [IO.File]::WriteAllText($path, ($out | ConvertTo-Json -Depth 4), (New-Object System.Text.UTF8Encoding($true)))
@@ -900,7 +1069,9 @@ function Start-SmokeTest {
 }
 
 function Hide-ConsoleWindow {
-    if ($ShowConsole) { return }
+    # ซ่อนเฉพาะหน้าต่างคอนโซลที่ตัวเปิด .cmd สร้าง (-HideConsole) ไม่ซ่อนเทอร์มินัลที่ผู้ใช้เปิดไว้เอง
+    if ($ShowConsole -or -not $HideConsole) { return }
+    $script:ConsoleHidden = $true
     try {
         if (-not ('DrmGui.Native' -as [type])) {
             Add-Type -Namespace DrmGui -Name Native -MemberDefinition '[DllImport("kernel32.dll")] public static extern System.IntPtr GetConsoleWindow(); [DllImport("user32.dll")] public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);'
@@ -912,6 +1083,10 @@ function Hide-ConsoleWindow {
 
 function Start-Gui {
     $script:Ui = New-DrmWindow
+    $script:Ui.Window.Title = 'Driver & Runtime Manager v{0} — ตัวจัดการไดรเวอร์และรันไทม์' -f (Get-DrmVersion)
+    $script:PendingFileArgs = @{}
+    $script:LastDiag = $null
+    $script:ConsoleHidden = $false
     $script:Queue = New-Object 'System.Collections.Concurrent.ConcurrentQueue[object]'
     $script:Sync = [hashtable]::Synchronized(@{ Cancel = $false })
     $script:Workers = @{}
@@ -954,16 +1129,39 @@ function Start-Gui {
             $oemScan = if ($script:LastUpdate) { $script:LastUpdate.OemScan } else { $null }
             $r = New-DrmReport -Title 'รายงานการตรวจระบบ' -System $script:Scan.System -Devices $script:Scan.Devices -Runtimes $script:Scan.Runtimes -Checks $script:Scan.Checks -WuDrivers $wu -OemScan $oemScan
             $script:LastReport = $r.Html
-            Start-Process $r.Html
+            Open-UiDocument $r.Html
         })
     $u.DevFilter.Add_SelectionChanged({ Update-DeviceFilter })
     $u.DevSearch.Add_TextChanged({ Update-DeviceFilter })
-    $u.DevGrid.Add_MouseDoubleClick({
+    $u.DevGrid.Add_MouseDoubleClick({ $sel = $script:Ui.DevGrid.SelectedItem; if ($sel) { Show-DeviceDetails $sel.Data } })
+    $u.MenuDetails.Add_Click({ $sel = $script:Ui.DevGrid.SelectedItem; if ($sel) { Show-DeviceDetails $sel.Data } })
+    $u.MenuCatalog.Add_Click({
             $sel = $script:Ui.DevGrid.SelectedItem
             if (-not $sel) { return }
-            $d = $sel.Data
-            $txt = "อุปกรณ์: {0}`nคลาส: {1}`nผู้ผลิตฮาร์ดแวร์: {2} ({3})`nผู้ให้ไดรเวอร์: {4}`nเวอร์ชัน/วันที่: {5} / {6}`nINF: {7}`nผู้ลงนาม: {8}`nการรับรอง: {9}`nสถานะ: {10}`nลำดับติดตั้ง: {11}`n`nHardware IDs:`n{12}`n`nDevice ID: {13}" -f $d.Name, $d.Class, $d.Manufacturer, $d.VendorName, $d.DriverProvider, $d.DriverVersion, $d.DriverDate, $d.InfName, $d.Signer, $d.CertText, $(if ($d.ProblemText) { $d.ProblemText } else { 'ปกติ' }), $d.OrderGroup, (($d.HardwareIds | Select-Object -First 6) -join "`n"), $d.DeviceId
-            [void][Windows.MessageBox]::Show($txt, 'รายละเอียดไดรเวอร์')
+            $url = [string](Get-DrmProp $sel.Data 'CatalogUrl' '')
+            if ($url) { Open-UiDocument $url } else { [void][Windows.MessageBox]::Show('อุปกรณ์นี้ไม่มี Hardware ID ให้ค้นหา', 'Microsoft Update Catalog') }
+        })
+    $u.MenuCopyHwid.Add_Click({
+            $sel = $script:Ui.DevGrid.SelectedItem
+            if (-not $sel) { return }
+            $ids = @($sel.Data.HardwareIds) + @($sel.Data.CompatibleIds)
+            [Windows.Clipboard]::SetText($(if ($ids.Count) { $ids -join [Environment]::NewLine } else { $sel.Data.DeviceId }))
+            $script:Ui.TxtStatus.Text = 'คัดลอก Hardware ID แล้ว'
+        })
+    $u.BtnDiag.Add_Click({ Start-UiDiagnostics })
+    $u.BtnSaveProfile.Add_Click({
+            $dlg = New-Object Microsoft.Win32.SaveFileDialog
+            $dlg.Filter = 'ชุดที่เลือก (*.json)|*.json'
+            $dlg.FileName = 'driver-runtime-selection.json'
+            if ($dlg.ShowDialog()) { [void](Save-DrmSelectionProfile -Selection (Get-UiSelectionProfile) -Path $dlg.FileName); $script:Ui.TxtStatus.Text = 'บันทึกชุดที่เลือกแล้ว: ' + $dlg.FileName }
+        })
+    $u.BtnLoadProfile.Add_Click({
+            $dlg = New-Object Microsoft.Win32.OpenFileDialog
+            $dlg.Filter = 'ชุดที่เลือก (*.json)|*.json'
+            if ($dlg.ShowDialog()) {
+                try { Set-UiSelectionProfile (Read-DrmSelectionProfile -Path $dlg.FileName); $script:Ui.TxtStatus.Text = 'โหลดชุดที่เลือกแล้ว: ' + $dlg.FileName }
+                catch { [void][Windows.MessageBox]::Show($_.Exception.Message, 'โหลดชุดที่เลือกไม่ได้', 'OK', 'Warning') }
+            }
         })
     $u.BtnUpdRecommended.Add_Click({
             foreach ($i in $script:Updates) {
@@ -1003,7 +1201,7 @@ function Start-Gui {
     $u.BtnOpenReport.Add_Click({
             $last = $script:LastReport
             if (-not $last) { $last = Get-ChildItem -LiteralPath $script:Session.ReportDir -Filter '*.html' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName }
-            if ($last) { Start-Process $last } else { [void][Windows.MessageBox]::Show('ยังไม่มีรายงาน', 'Driver & Runtime Manager') }
+            if ($last) { Open-UiDocument $last } else { [void][Windows.MessageBox]::Show('ยังไม่มีรายงาน', 'Driver & Runtime Manager') }
         })
     $u.BtnInstall.Add_Click({ Invoke-UiInstallClick })
     $u.BtnStop.Add_Click({
@@ -1061,6 +1259,7 @@ function Start-Gui {
         })
     [void]$u.Window.ShowDialog()
     foreach ($w in @($script:Workers.Values)) { try { $w.PS.Stop(); $w.PS.Dispose(); $w.Runspace.Dispose() } catch { } }
+    if ($script:ConsoleHidden) { Show-ConsoleWindow }
 }
 
 # ---------------------------------------------------------------------------
@@ -1070,6 +1269,7 @@ switch ($Mode) {
     'SelfTest' { exit (Invoke-SelfTest) }
     'Scan' { exit (Invoke-HeadlessScan) }
     'Install' { exit (Invoke-HeadlessInstall) }
+    'Diagnose' { exit (Invoke-HeadlessDiagnose) }
     default {
         if (-not (Test-DrmIsWindows)) { Write-Host 'หน้าต่าง GUI ใช้ได้บน Windows เท่านั้น' -ForegroundColor Red; exit 2 }
         try { Start-Gui }

@@ -16,12 +16,15 @@ description: ตรวจระบบและชุดไดรเวอร์�
 | `scripts/DriverRuntimeManager.ps1` | หน้าต่าง GUI และโหมดคำสั่ง `-Mode Gui|Scan|Install|SelfTest` |
 | `scripts/DriverRuntimeManager.psm1` | แกนหลัก: ตรวจระบบ อุปกรณ์ ใบรับรอง OEM Windows Update รันไทม์ ไฟล์ทุกรูปแบบ แผน ทำความสะอาด รายงาน |
 | `scripts/catalog.json` | ข้อมูลที่แก้ได้โดยไม่แตะโค้ด: รันไทม์ เครื่องมือ OEM วงจรชีวิต Windows กฎตัวติดตั้ง |
+| `scripts/errors.json` | ฐานข้อมูลรหัสข้อผิดพลาด: ความหมายภาษาไทยและวิธีแก้ แยกตามเครื่องมือ (MSI, Windows Update, pnputil, winget, DISM, MSIX, Dell, HP) และรหัสปัญหาอุปกรณ์ |
 | `tests/DriverRuntimeManager.Tests.ps1` | ชุดทดสอบ Pester 5 (ตรรกะทุกแพลตฟอร์ม + ส่วน Windows จริง) |
+| `CHANGELOG.md` | ประวัติรุ่น (ปัจจุบัน 1.1.0 — `Get-DrmVersion`) |
 
 อ่านเพิ่มตามงาน: ลำดับติดตั้งและเครื่องมือผู้ผลิต [references/install-order.md](references/install-order.md),
 การรับรอง WHQL/ลายเซ็น [references/certification.md](references/certification.md),
 ไฟล์ติดตั้งทุกรูปแบบ [references/file-formats.md](references/file-formats.md),
-รูปแบบแคตตาล็อกและการพัฒนาต่อ [references/catalog-format.md](references/catalog-format.md)
+รูปแบบแคตตาล็อกและการพัฒนาต่อ [references/catalog-format.md](references/catalog-format.md),
+**ข้อบกพร่องที่รู้แล้ว วิธีเก็บข้อมูลดีบัก และแผนรอบถัดไป [references/known-issues.md](references/known-issues.md) — อ่านก่อนแก้บั๊กหรือเพิ่มฟีเจอร์ทุกครั้ง**
 
 ## ขั้นตอนทำงาน
 
@@ -46,6 +49,20 @@ description: ตรวจระบบและชุดไดรเวอร์�
    แสดง log และตารางความเข้ากันได้ทั้งหมด แล้วรีสตาร์ทเมื่อผู้ใช้เลือก
 8. **ส่งมอบ** บอกตำแหน่ง log (`%ProgramData%\DriverRuntimeManager\Logs`) รายงาน (`...\Reports\*.html|json`) รายการที่สำเร็จ/ล้มเหลว/ต้องทำต่อเอง
    รหัส exit และสิ่งที่ยังต้องรีสตาร์ท ห้ามอ้างว่าติดตั้งสำเร็จถ้า log ไม่ยืนยัน
+9. **เมื่อมีข้อผิดพลาด** อ่านบรรทัด `คำแนะนำ:` ใน log (ความหมาย + วิธีแก้จาก `errors.json`) และไฟล์ `Logs\Output_*.txt` ของคำสั่งที่ล้มเหลว
+   ถ้ายังไม่พอ ให้รวบรวมข้อมูลดีบักด้วย `-Mode Diagnose` (หรือปุ่มในแท็บ 6) แล้ววิเคราะห์จาก zip ตาม [references/known-issues.md](references/known-issues.md)
+   อุปกรณ์ที่ไม่มีไดรเวอร์: คลิกขวา > ค้นหาใน Microsoft Update Catalog (ลิงก์จาก Hardware ID) แล้วติดตั้งไฟล์ .cab/.inf ที่ได้ผ่านแท็บติดตั้งจากไฟล์
+
+## โหมดคำสั่งที่ใช้บ่อย
+
+| งาน | คำสั่ง (ในโฟลเดอร์ `scripts`) |
+| --- | --- |
+| ตรวจระบบ + ตรวจอัปเดต | `powershell -ExecutionPolicy Bypass -File .\DriverRuntimeManager.ps1 -Mode Scan -CheckUpdates` |
+| ทดลองลำดับติดตั้ง | `... -Mode Install -Preset gaming -IncludeOem -IncludeWindowsUpdateDrivers -DryRun` |
+| ติดตั้งเฉพาะรายการ | `... -Mode Install -Items "vc14-x64,directx-jun2010"` (ไม่ระบุ `-Preset` = ไม่รวมชุดแนะนำ) |
+| ติดตั้งไฟล์หลายไฟล์ | `... -Mode Install -Files "D:\drv\chipset.zip;D:\drv\lan"` (คั่นด้วย `;`) |
+| ใช้ชุดที่บันทึกไว้ซ้ำ | `... -Mode Install -SelectionProfile .\gaming-pc.json` / บันทึกด้วย `-ExportProfile <ไฟล์>` |
+| รวบรวมข้อมูลดีบัก | `... -Mode Diagnose -SinceHours 48` (ใส่ `-IncludeIdentifiers` เมื่อต้องการ Serial/Service Tag) |
 
 ## กฎความปลอดภัยและแหล่งที่มา
 
@@ -59,8 +76,10 @@ description: ตรวจระบบและชุดไดรเวอร์�
 
 ## พัฒนาต่อและตรวจรับ
 
-- เพิ่มรันไทม์/เครื่องมือ OEM/กฎตัวติดตั้งใน `catalog.json` ตาม [references/catalog-format.md](references/catalog-format.md) แล้วรัน `-Mode SelfTest`
+- เพิ่มรันไทม์/เครื่องมือ OEM/กฎตัวติดตั้งใน `catalog.json` และรหัสข้อผิดพลาดใน `errors.json` ตาม [references/catalog-format.md](references/catalog-format.md) แล้วรัน `-Mode SelfTest`
+- แก้บั๊กเสร็จให้ย้ายรายการใน `known-issues.md` ไปตาราง "แก้แล้ว" พร้อมรุ่นและการทดสอบที่กันไม่ให้กลับมา และเพิ่มบรรทัดใน `CHANGELOG.md`; พบบั๊กใหม่ที่ยังไม่แก้ให้เพิ่มตามแม่แบบในไฟล์เดียวกัน
 - ข้อตกลงของโมดูล: ฟังก์ชันที่คืนรายการคืน "อาร์เรย์เสมอ" (`return , $list`) ให้เก็บใส่ตัวแปรก่อนส่งต่อ pipeline และห้ามครอบด้วย `@()`;
-  โค้ดต้องรันบน PowerShell 5.1 (ไม่ใช้ `??`, `?:`, `-Parallel`); ไฟล์ .ps1/.psm1 บันทึกเป็น UTF-8 มี BOM; วันที่ใช้ InvariantCulture (เครื่องไทยใช้ปฏิทินพุทธ)
+  โค้ดต้องรันบน PowerShell 5.1 (ไม่ใช้ `??`, `?:`, `-Parallel`); ไฟล์ .ps1/.psm1 บันทึกเป็น UTF-8 มี BOM; วันที่ใช้ InvariantCulture (เครื่องไทยใช้ปฏิทินพุทธ);
+  รหัสข้อผิดพลาดใช้ int64 และเลขฐานสิบหกต้องมี `L` (`0xFFFF0000L`) — กับดักอื่น ๆ ดูหัวข้อ "กับดักของ PowerShell" ใน known-issues.md
 - ตรวจรับ: `Invoke-Pester tests` (ทุกแพลตฟอร์ม), `-Mode SelfTest` ด้วย `-STA` บน Windows, workflow `.github/workflows/driver-runtime-manager.yml`
   ทดสอบบน Windows จริงทั้ง PowerShell 5.1 และ 7 รวมการติดตั้งจริงจาก Microsoft ผล Linux ไม่ใช่หลักฐานว่าใช้ได้บน Windows

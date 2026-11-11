@@ -137,7 +137,13 @@ PowerShell tries the edition that is running the runner first. Tools marked with
 | `native` | Windows program | .exe .com | direct (windows) |
 | `html` | HTML page (opens the browser) | .html .htm | default browser (windows), open (mac), xdg-open (linux) |
 
-During development every entry below whose toolchain was installed ran its fixture successfully on Linux with PowerShell 7.4: Python, JavaScript (Node.js, Bun), TypeScript (Bun, ts-node, Node.js type stripping), PowerShell, Bash, Zsh, C and C++ (gcc, clang, cc), C# (.NET 10 file-based, .NET 8 generated project, Mono), F# script, Java (javac and source launcher), Go, Rust, Ruby, Perl, PHP, Lua, Tcl, AWK, Fortran, Pascal, COBOL, Common Lisp, Scheme and OCaml, plus Rust, Go, .NET and npm project folders. The CI workflow runs every fixture whose toolchain is present on Ubuntu, macOS and Windows; on Windows it also runs Batch, VBScript and the launchers under both Windows PowerShell 5.1 and PowerShell 7. Entries without a fixture run follow the toolchain's documented command line.
+Verified results (every fixture prints its arguments and exits with code 3; the runner must return exactly that):
+
+- **Windows, Windows PowerShell 5.1 (GitHub Actions windows-latest):** Batch, VBScript, PowerShell (5.1 and 7), Python, JavaScript, TypeScript (Node.js), C and C++ (gcc, clang), C# (dotnet and the built-in csc.exe), VB.NET (vbc.exe), F# script, Java (javac and source launcher), Kotlin, Go, Rust, Haskell, Julia, R, Ruby, Perl, PHP, Bash (Git Bash), AWK, Tcl and Fortran, plus `run-code.cmd` and `run-code-wait.cmd`.
+- **Ubuntu and macOS, PowerShell 7 (GitHub Actions):** Python, JavaScript, TypeScript, PowerShell, Bash, Zsh (macOS), C and C++ (gcc, clang), C#, F#, Java, Kotlin, Swift, Go (Ubuntu), Rust, Haskell (Ubuntu), Ruby, Perl, PHP (Ubuntu), AWK, Tcl and Fortran (Ubuntu).
+- **Linux during development, PowerShell 7.4:** additionally Lua, Pascal (fpc), COBOL, Common Lisp (sbcl), Scheme (guile), OCaml, C# with Mono and .NET 8/10, TypeScript with Bun and ts-node, and Rust, Go, .NET and npm project folders.
+
+The test suite runs every fixture whose toolchain is installed and lists the skipped ones, so each CI log shows exactly what ran. Entries never exercised so far (for example Dart, Elixir, Erlang, Groovy, Zig, Nim, Crystal, D, V, Ada, Prolog, AutoHotkey) follow the toolchain's documented command line.
 
 ## Adding a language
 

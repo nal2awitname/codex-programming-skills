@@ -88,7 +88,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Invoke-Code.ps1 .\app.rs
 
 ## ความหมายของ "รันได้ชัวร์"
 
-สิ่งที่ตรวจแล้ว: ตัวรันและตัวตรวจผ่านชุดทดสอบอัตโนมัติ 19 ชุดที่ใช้ PowerShell และคอมไพเลอร์จริง ระหว่างพัฒนารันโปรแกรมทดสอบได้ 32 แบบบน Linux (PowerShell 7.4) เช่น Python, C, C++, C# (.NET 8, .NET 10, Mono), Java, Go, Rust, JavaScript, TypeScript, PHP, Ruby, Perl, Lua, Fortran, Pascal, COBOL, Lisp, Scheme และ OCaml CI ของรีโปรันชุดเดียวกันบน Ubuntu, macOS และ Windows โดยบน Windows ทดสอบทั้ง Windows PowerShell 5.1 และ PowerShell 7 รวมถึง Batch, VBScript และไฟล์ `.cmd`
+สิ่งที่ตรวจแล้วจริง: ชุดทดสอบอัตโนมัติ 19 ชุดเรียก PowerShell และคอมไพเลอร์จริง ผ่านครบทั้ง 6 งานของ GitHub Actions (Windows, Ubuntu, macOS × Python 3.10/3.12) บน **Windows PowerShell 5.1** ซึ่งมีในทุกเครื่อง Windows ตัวรันคอมไพล์และรันได้ 32 แบบ ได้แก่ Batch, VBScript, PowerShell 5.1 และ 7, Python, JavaScript, TypeScript, C/C++ (gcc, clang), C# (dotnet และ csc.exe ที่มากับ Windows), VB.NET, F#, Java, Kotlin, Go, Rust, Haskell, Julia, R, Ruby, Perl, PHP, Bash (Git Bash), AWK, Tcl, Fortran รวมถึงไฟล์ `run-code.cmd` และ `run-code-wait.cmd` บน Ubuntu/macOS ผ่านเพิ่มอีก เช่น Swift และ Zsh ระหว่างพัฒนายังรัน Lua, Pascal, COBOL, Lisp, Scheme, OCaml และโฟลเดอร์โปรเจกต์ Cargo/Go/.NET/npm ได้ ชุดทดสอบยังตรวจการส่งอาร์กิวเมนต์ที่มีช่องว่าง เครื่องหมายคำพูด ข้อความว่าง และภาษาไทย, stdin, timeout, รหัสออก และตัวตรวจสคริปต์ ทั้งใน PowerShell 5.1 และ 7
 
 สิ่งที่ตัวรันรับประกันไม่ได้: ภาษานั้นต้องติดตั้งอยู่ในเครื่อง (ถ้าไม่มีจะได้รหัส 69 พร้อมคำสั่งติดตั้ง) และตัวรันไม่แก้บั๊กในโค้ดของโปรแกรมเอง ภาษาที่ไม่มีเครื่องมือในเครื่องทดสอบใช้คำสั่งตามเอกสารของเครื่องมือนั้น ดูรายการที่ผ่านจริงในผล CI ล่าสุด
 

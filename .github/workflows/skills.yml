@@ -1,4 +1,4 @@
-name: Skills 2.1 verification
+name: Skills verification
 on:
   push:
   pull_request:
@@ -53,6 +53,9 @@ jobs:
       - name: Build reproducible release bundle
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         run: python -B scripts/build_release.py --output-dir dist
+      - name: Verify built archives and installed workflows
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
+        run: python -B scripts/verify_release.py --release-dir dist --smoke
       - uses: actions/upload-artifact@v4
         if: matrix.os == 'ubuntu-latest' && matrix.python == '3.12'
         with:

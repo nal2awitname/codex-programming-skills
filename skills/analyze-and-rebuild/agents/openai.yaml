@@ -1,8 +1,7 @@
 interface:
-  display_name: วิเคราะห์และสร้างโปรแกรมใหม่
-  short_description: เข้าใจโค้ด แยกส่วน และสร้างใหม่โดยไม่คัดลอก
-  default_prompt: ใช้ $analyze-and-rebuild วิเคราะห์โปรแกรมนี้ อธิบายภาษาและการทำงาน
-    แยกส่วนประกอบ แล้วสร้างใหม่จากข้อกำหนดพฤติกรรมโดยห้ามคัดลอกโค้ดต้นฉบับ
+  display_name: "Analyze and Rebuild"
+  short_description: "Explain behavior and rebuild without copying code"
+  default_prompt: "Use $analyze-and-rebuild to explain this program from evidence and, if reconstruction is requested, derive an audited behavior contract, implement independently without copying original code, and verify the agreed scope."
   icon_small: assets/icon.svg
   icon_large: assets/icon.svg
 policy:

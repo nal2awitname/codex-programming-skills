@@ -1,50 +1,43 @@
 ---
 name: windows-simulator
-description: "เลือกและตั้งระบบจำลองหรือทดสอบ Windows เพื่อรันและตรวจโปรแกรม สคริปต์ หรือการตั้งค่าที่ต้องใช้ Windows (set up a Windows simulation/test environment). ใช้เมื่อสภาพแวดล้อมปัจจุบันไม่ใช่ Windows แต่งานต้องยืนยันพฤติกรรมบน Windows; งานเขียนโปรแกรมทั่วไปใช้ app-builder และงานหาสาเหตุบั๊กใช้ debug-and-fix."
+description: "Prepare a reproducible Windows test environment for programs, PowerShell or batch scripts, and OS-specific behavior. Use for Windows host, VM, CI, or compatibility-layer setup. Route application implementation to app-builder and defect repair to debug-and-fix."
 ---
 
-# จำลองและทดสอบ Windows
+# Prepare and test Windows environments
 
-เลือกวิธีให้เหมาะกับสิ่งที่ต้องยืนยัน แล้วตั้งระบบให้รันซ้ำได้ แยกผลที่ตรวจจริงออกจากสิ่งที่ประมาณการ
-สกิลนี้เป็นแนวทาง ไม่ได้ให้ลิขสิทธิ์ Windows, KVM, Docker หรือสิทธิ์ใช้ runner ที่สภาพแวดล้อมยังไม่มี
+Choose an available host that can verify the requested behavior, configure it reproducibly, and report actual results. This skill does not supply Windows licensing, images, virtualization, runners, or access to the user's machine. Respond in the user's language; write code, comments, commands, identifiers, and configuration in English.
 
-## ระบุสิ่งที่ต้องยืนยัน
+## Route and scope
 
-- ประเภทเป้าหมาย: สคริปต์ (PowerShell/batch), โปรแกรม .exe, ตัวติดตั้ง, หรือพฤติกรรมของ OS เช่น registry, service, path
-- ต้องการ Windows จริงหรือแค่ API ที่เข้ากันได้ และเวอร์ชันที่ต้องรองรับ (10, 11, Server)
-- ต้องมี GUI หรือไม่ และต้องรันซ้ำอัตโนมัติ (CI) หรือใช้ครั้งเดียว
-- ตรวจก่อนว่ารันบนระบบอะไร มี `/dev/kvm`, `docker`, `wine`, `pwsh` และสิทธิ์ใช้ CI หรือไม่ ไม่ถือว่ามีเพียงเพราะเคยพบในโครงการอื่น
+- Identify the target artifact, required Windows version/architecture, GUI needs, OS APIs, and whether an automated or interactive test is needed.
+- Inspect the actual host, available runtimes, virtualization support, and CI access before selecting a method. Do not assume Docker, KVM, Wine, PowerShell, or a Windows runner exists.
+- Follow an already chosen method. Otherwise select the available method with the least setup that establishes the required evidence; offer alternatives only when the tradeoff changes the outcome.
+- A browser imitation of a desktop is a UI simulation, not Windows guest execution. Clarify that distinction when the request could mean either.
 
-## ตัวเลือกและเกณฑ์เลือก
+## Select a method
 
-| แนวทาง | เหมาะกับ | ข้อจำกัด |
+| Method | Appropriate use | Evidence limits |
 | --- | --- | --- |
-| CI บน Windows runner (เช่น GitHub Actions `windows-latest`) | ทดสอบอัตโนมัติด้วย Windows จริง ไม่ต้องดูแล VM; สคริปต์ PowerShell ด้วย Pester | ต้องมี repository/CI และการรันเป็นรอบ ไม่โต้ตอบสด |
-| VM เต็มรูป (QEMU/KVM, libvirt) | ความเข้ากันได้สูง มี GUI ครบ ปรับแต่งได้ละเอียด | KVM ช่วยเร่งความเร็ว; QEMU แบบ software emulation อาจใช้ได้แต่ช้ากว่ามาก ต้องมีอิมเมจและสิทธิ์ใช้งาน |
-| Docker ครอบ VM (เช่น dockur/windows) | ตั้ง VM ได้เร็ว สคริปต์ได้ด้วย compose | ยังเป็น VM จริง ต้องส่ง `/dev/kvm` เข้า container และมีเรื่องลิขสิทธิ์ |
-| Wine | แอปบางตัวที่มีรายงานเข้ากันได้ดี เบา ไม่ต้องมี Windows | เป็นชั้นแปล API ไม่ใช่ Windows; ผลอาจต่างจากเครื่องจริง ตรวจที่ AppDB ก่อน |
-| PowerShell 7 บน Linux/macOS | ตรวจตรรกะสคริปต์ที่ไม่พึ่ง API เฉพาะ Windows | ไม่ครอบ Windows PowerShell 5.1, registry, service, COM |
+| Windows host or CI runner | Actual Windows scripts, APIs, and automated tests | Requires access and relevant runtime; CI is not a live interactive desktop |
+| Full VM, including a VM managed by Docker | Windows guest execution and GUI workflows | Requires a usable image and license; KVM accelerates QEMU, while software emulation may be much slower |
+| Wine | Preliminary checks for a compatible application | An API compatibility layer; results do not establish Windows compatibility |
+| PowerShell on Linux/macOS | Platform-independent script logic | A script runtime, not Windows; excludes Windows PowerShell 5.1, COM, registry, and Windows services |
 
-ลำดับแนะนำ: ถ้าต้องการหลักฐานว่าใช้ได้บน Windows ให้เลือก CI runner หรือ VM ก่อน; ใช้ Wine และ pwsh เป็นการตรวจเบื้องต้นเท่านั้น
-หากผู้ใช้กำหนดวิธีไว้แล้ว ให้ทำตามขอบเขตนั้น มิฉะนั้นเลือกวิธีที่มีอยู่และยืนยันเป้าหมายได้ด้วยภาระตั้งค่าน้อยที่สุด เสนอ 2-3 ตัวเลือกเมื่อความแตกต่างมีผลต่อโจทย์ ไม่ต้องหยุดขอให้เลือกในเรื่องที่ตัดสินใจจากข้อกำหนดได้
+## Workflow
 
-## ตั้งระบบ
+1. **Inspect.** Record available OS/runtime versions and the specific behavior to prove. Validate required resources, ports, volumes, image provenance, and permissions for the selected method.
+2. **Plan.** State a short setup/test/cleanup plan for nontrivial work, with one observable acceptance check. Reuse an existing working environment instead of rebuilding it unnecessarily.
+3. **Configure.** Store repeatable workflows, scripts, or VM configuration in the project. Keep credentials and license keys outside version control. For Windows PowerShell support, test the relevant `powershell` and `pwsh` runtimes; preserve test artifacts and use `fail-fast: false` when a matrix is needed.
+4. **Verify.** Execute the intended program or tests in that environment. Check successful and failing inputs, record actual versions and results, and verify important GUI or OS interactions rather than relying on a build alone.
 
-- เก็บคำสั่งตั้งค่าเป็นไฟล์ในโครงการ (workflow, compose, script) ให้รันซ้ำได้ ไม่ใช้ขั้นตอนมือที่ไม่มีบันทึก
-- CI: ใช้ matrix ที่มีทั้ง `pwsh` และ `powershell` (5.1) เมื่อเป้าหมายรวม Windows PowerShell, ตั้ง `fail-fast: false` และเก็บผลทดสอบเป็น artifact
-- Pester: ตรวจเวอร์ชันที่มีและใช้เวอร์ชันตามโครงการ ติดตั้งเพิ่มเมื่อจำเป็น; ใช้ `-SkipPublisherCheck` เฉพาะเมื่อพบ publisher conflict ที่ตรวจสอบแหล่งแพ็กเกจแล้ว
-- VM/Docker: ส่ง `/dev/kvm` เข้า container ตรวจพอร์ตและ volume และระบุแหล่งอิมเมจกับสิทธิ์ใช้งาน
-- ไม่ใส่ license key รหัสผ่าน หรือ token ลงในไฟล์ในรีโป ใช้ตัวแปรสภาพแวดล้อมหรือ secret ของ CI
+## Recovery and completion
 
-## ตรวจรับ
+- Diagnose missing dependencies or host support before retrying. Never claim a VM started, Windows ran, or a UI interaction passed without actual evidence.
+- For Pester, use the project version and install only when needed. Use `-SkipPublisherCheck` only for a diagnosed publisher conflict after checking the package source.
+- If the required host is unavailable, prepare usable configuration and exact run commands, continue supported checks, and mark Windows execution unverified.
+- Clean up owned temporary processes/resources when applicable; record anything still running. Stop once the requested environment and behavior checks are complete or a concrete host/access blocker remains.
+- Continue already authorized setup without extra approval; external services, downloads, and CI changes must remain within the user's authorized scope.
 
-- รันคำสั่งทดสอบในระบบนั้นจริง และรายงานเวอร์ชัน OS/PowerShell/Wine ที่ใช้
-- ยืนยันว่ากรณีที่ผ่านและกรณีผิดพลาดให้ผลต่างกันตามคาด
-- รายงานแยก: ผ่านบน Windows จริง, ผ่านบน Wine หรือ PowerShell บน Linux/macOS ซึ่งยังไม่ใช่หลักฐานบน Windows, และสิ่งที่ตรวจไม่ได้พร้อมเหตุผล PowerShell ข้ามแพลตฟอร์มเป็น runtime ของสคริปต์ ไม่ใช่ตัวจำลอง Windows
-- ถ้าสภาพแวดล้อมรัน Windows ไม่ได้ ส่งไฟล์ workflow/compose พร้อมคำสั่งให้ผู้ใช้รันในที่ที่รองรับ และบอกชัดว่ายังไม่ได้ตรวจ
+## Delivery
 
-## ส่งมอบ
-
-- ตำแหน่งไฟล์ตั้งค่า คำสั่งรัน ข้อกำหนดเบื้องต้น และผลตรวจจริง
-- ตัวเลือกอื่นที่ไม่ได้เลือกและเหตุผล เพื่อให้ผู้ใช้สลับได้
-- การเปิดใช้ CI, ดาวน์โหลดอิมเมจ หรือสร้างบริการภายนอกเป็นงานเพิ่มเมื่อผู้ใช้ไม่ได้อนุญาตไว้
+Link configuration files and give prerequisites, setup/run/cleanup commands, tested versions, actual results, and outstanding checks. Separate actual Windows results from Wine or cross-platform PowerShell results and from configuration that has not been executed.

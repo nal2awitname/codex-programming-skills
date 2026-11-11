@@ -40,11 +40,11 @@ python .\skills\rebuild-windows-from-behavior\scripts\rebuild.py inspect 'C:\Pro
 เรียก AI ด้วยข้อความนี้และแนบไฟล์/ข้อมูลการทดสอบจริง:
 
 ```text
-ใช้ $rebuild-windows-from-behavior วิเคราะห์โปรแกรม Windows นี้จากพฤติกรรม
-ระบุภาษาโดยอ้างหลักฐาน อธิบายแนวคิดและส่วนประกอบ สำรวจฟีเจอร์ที่เข้าถึงได้
-สร้างข้อกำหนดที่ไม่มีโค้ดต้นฉบับ แล้วเขียนใหม่ด้วยการออกแบบของตนเอง
-ห้ามคัดลอก แปล หรือดัดแปลงโค้ดต้นฉบับแม้แต่บรรทัดเดียว
-ทดสอบตามข้อกำหนด แยกส่วนที่ยังตรวจไม่ได้ และเตรียมโครงการพัฒนาต่อ
+Use $rebuild-windows-from-behavior to analyze this Windows program from behavior.
+Identify languages from evidence, explain components, and inventory accessible features.
+Create a source-free contract and implement it with an independent design.
+Never copy, translate, or adapt original implementation code.
+Test the contract, report unverified scope, and prepare the project for continued development.
 ```
 
 ## กระบวนการใช้งาน

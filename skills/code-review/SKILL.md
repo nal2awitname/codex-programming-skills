@@ -1,62 +1,43 @@
 ---
 name: code-review
-description: "ตรวจสอบโค้ด ไฟล์ หรือ Pull Request เพื่อหาบั๊กและ regression ที่มีหลักฐาน พร้อมผลกระทบและตำแหน่งแก้ไข ใช้สำหรับ code review; เมื่อผู้ใช้ขอให้ลงมือแก้บั๊กหรือสร้างฟีเจอร์ ให้ใช้ workflow ของงานนั้นแทน"
+description: "Review code, files, diffs, or pull requests for evidence-backed bugs and regressions. Use for actionable findings with triggers, impact, and exact locations. Route requested fixes to debug-and-fix and feature implementation to app-builder."
 ---
 
-# ตรวจสอบโค้ดจากหลักฐาน
+# Review code using evidence
 
-ส่งผลตรวจที่ผู้เขียนใช้ตัดสินใจและแก้ไขได้ โดยผูกแต่ละประเด็นกับเงื่อนไขที่เกิดจริง
-ตอบตามภาษาของผู้ใช้ และคงชื่อ API ตัวแปร และคำสั่งตามโค้ด
+Report defects that a maintainer can evaluate and repair. Respond in the user's language; use English for any generated code or machine-facing configuration. Preserve exact existing symbols and paths when citing evidence. Default to findings in chat; modify code or post reviews only when authorized.
 
-## กำหนดสิ่งที่ตรวจ
+## Route and scope
 
-- ระบุไฟล์ โฟลเดอร์ diff หรือ PR จากคำขอ ใช้บริบท repository เพื่อหาคำสั่งและข้อกำหนดของโครงการ
-- สำหรับ diff ให้บันทึก base/head ที่อ่านจริง ใช้ merge base ตามความหมายของ PR แทนการเปรียบเทียบ branch tip โดยเดา
-- แยกบั๊กที่เกิดจาก diff ออกจากปัญหาที่มีอยู่ก่อน หากตรวจทั้งไฟล์หรือโครงการ ให้บอกขอบเขตที่อ่านได้จริง
-- ถ้ามีเพียงโค้ดบางส่วน ให้ตรวจต่อได้จากข้อมูลนั้น และระบุบริบทที่ขาดเมื่อส่งผล อย่าอ้างว่าได้ตรวจ repository ทั้งหมด
+- Identify the requested files, project, diff, or PR. Read applicable repository instructions and only the surrounding callers, validators, schemas, migrations, and configuration needed to assess behavior.
+- For a diff, record the actual base and head. Use the PR's merge-base semantics rather than guessing from branch tips. Separate introduced defects from pre-existing problems.
+- For partial input, review what is available and state missing context. Do not imply that the whole repository was reviewed.
+- Use `debug-and-fix` when repair is requested and `app-builder` for new behavior.
 
-## ตรวจเส้นทางที่มีผลต่อพฤติกรรม
+## Workflow
 
-อ่านโค้ดที่เปลี่ยนพร้อม caller, validator, schema, config หรือ migration เฉพาะที่จำเป็น
-เพื่อตอบว่า input ใดเข้าถึงปัญหาได้และสัญญาการทำงานใดถูกละเมิด
+1. **Inspect.** Establish intended behavior and public contracts from requirements and relevant code.
+2. **Plan.** For a broad review, choose the behavior paths with the largest plausible impact and state a short review scope. A small diff needs no separate plan artifact.
+3. **Trace.** Follow changed data and state through reachable callers. Check applicable empty/zero/false values, type conversions, bounds, cleanup, partial writes, async ordering, cancellation, retries, compatibility, authorization, and secret handling.
+4. **Validate.** Use a minimal input, meaningful test, or concise static trace. Check whether a caller or validator already prevents the suspected condition. Run related checks when they add evidence; distinguish observed failures from static findings.
 
-เลือกตรวจตามลักษณะโค้ด เช่น:
+## Finding requirements
 
-- ค่าว่าง ค่า `0`/`false` ค่าไม่มีอยู่ ขอบเขต index และการแปลงชนิดข้อมูล
-- การคืนค่า error handling การ cleanup ทรัพยากร และการเขียนข้อมูลที่อาจค้างบางส่วน
-- async ordering, cancellation, retry และการเรียกซ้ำที่ทำให้เกิดผลซ้ำ
-- ความเข้ากันได้กับ caller เก่า การเปลี่ยนรูปข้อมูล และข้อมูลเดิมหลัง migration
-- authorization หรือข้อมูลลับ เมื่อเส้นทางที่ตรวจมีพฤติกรรมดังกล่าว
+Report a finding only when all four are supported:
 
-ใช้ตัวอย่าง input, regression test หรือ static trace ที่สั้นที่สุดเพื่อยืนยันข้อสงสัย
-ตรวจด้วยว่า validator หรือ caller ป้องกันกรณีนั้นอยู่แล้วหรือไม่ก่อนรายงาน
-การพบ code smell เพียงอย่างเดียวไม่ใช่หลักฐานว่ามีบั๊ก
+1. A concrete, reachable trigger or input.
+2. Actual behavior that violates the intended contract.
+3. A specific user or system impact.
+4. An exact current file/line and supporting evidence or reproduction.
 
-## เลือกประเด็นที่ควรรายงาน
+Use impact for priority: `P0` widespread critical breakage requiring immediate action; `P1` major reachable functionality or data failure; `P2` a concrete defect for normal correction; `P3` a low-impact behavioral error. Merge findings with the same cause. Keep requested style or architecture advice separate from defects; do not fill a quota.
 
-แต่ละ finding ต้องอธิบายได้ครบว่า:
+## Recovery and completion
 
-1. เงื่อนไขหรือ input ใดทำให้เกิดปัญหา
-2. โค้ดปัจจุบันทำอะไร และต่างจากพฤติกรรมที่ต้องการอย่างไร
-3. ผู้ใช้หรือระบบส่วนใดได้รับผลกระทบ
-4. หลักฐานอยู่ที่ใด และบรรทัดใดเหมาะสำหรับการแก้ไข
+- If a check cannot run, preserve useful static findings and report the exact environment limitation. Do not invent results or repeatedly rerun unchanged failures.
+- Recheck locations against the reviewed head. For PR findings, prefer the smallest relevant changed line range.
+- Stop when the scoped paths have been assessed and material suspicions are confirmed, rejected, or explicitly blocked. Unread or inaccessible areas remain outside the conclusion.
 
-ใช้ระดับความสำคัญตามผลกระทบ ไม่ใช้ระดับความมั่นใจแทน severity:
+## Delivery
 
-- `P0`: ระบบเสียหายร้ายแรงในเส้นทางทั่วไป ต้องหยุดใช้งานหรือแก้ทันที
-- `P1`: ฟังก์ชันสำคัญเสีย ข้อมูลผิด หรือมีผลกระทบมากในกรณีที่เข้าถึงได้
-- `P2`: บั๊กที่ควรแก้ตามรอบปกติ มี trigger และผลกระทบชัดเจน
-- `P3`: ข้อผิดพลาดผลกระทบต่ำที่ยังอธิบายผลต่อพฤติกรรมได้
-
-ไม่เติม finding เพื่อให้ครบจำนวน รวมประเด็นที่เป็นสาเหตุเดียวกัน
-หากผู้ใช้ขอเรื่อง style หรือ architecture ให้แยกคำแนะนำเหล่านั้นจากบั๊กที่ยืนยันได้
-
-## ส่งผลตรวจ
-
-เรียง finding ตามความสำคัญ แต่ละข้อใช้ชื่อสั้น ตำแหน่ง `path:line`
-เงื่อนไขที่เกิด ผลกระทบ และหลักฐานหรือวิธีทำซ้ำ ระบุแนวทางแก้เมื่อช่วยให้เข้าใจประเด็น
-ใช้บรรทัดปัจจุบันที่ตรวจแล้ว; สำหรับ PR เลือกบรรทัดใน diff และตรวจว่ายังตรงกับ head ที่อ้างอิง
-
-ท้ายผลตรวจ ระบุสิ่งที่ตรวจ คำสั่งทดสอบและผลจริง รวมถึงข้อจำกัดที่มีผลต่อข้อสรุป
-หากไม่พบปัญหาที่มีหลักฐาน ให้บอกตรง ๆ พร้อมขอบเขตตรวจ ไม่รับรองว่าโค้ดปราศจากบั๊ก
-ส่งผลในแชตโดยปริยาย การแก้ไฟล์ โพสต์ review หรือ merge ทำเมื่ออยู่ในขอบเขตที่ผู้ใช้สั่งไว้
+List findings by priority with a short title, `path:line`, trigger, impact, and evidence; suggest a repair only when it clarifies the defect. End with the reviewed scope, actual test results, and material limits. If no supported defects were found, say so directly without guaranteeing that the code is bug-free.

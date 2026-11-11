@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.2.0 — 2026-11-11
+
+### Installable and verified releases
+
+- Build one full source archive and a self-contained archive for each skill, with file-level hashes, a release manifest and SHA256SUMS.
+- Add a portable Python installer with selection, dry-run, preflight validation, no-overwrite behavior and rollback of newly created targets.
+- Verify archive inventories, checksums, safe portable paths and source/standalone equivalence. Optional smoke verification installs all six skills outside the repository, executes both installed toolkit CLIs and runs tests from extracted source.
+- Run a complete real-CLI ARB lifecycle from an isolated installed directory with spaces in its path.
+
+### Clearer AI workflows and English code
+
+- Rewrite all six skill instructions and metadata in English with explicit routing, observable acceptance criteria, bounded planning, execution, verification, recovery and completion conditions.
+- Reduce duplicated workflow instructions while preserving artifact evidence, independent reconstruction boundaries and stage-specific references.
+- Keep Thai explanations in external prose. Enforce absence of Thai in executable/configuration sources and Markdown fenced code blocks.
+
+### Correctness fixes
+
+- Normalize host-relative evidence paths before matching inventory paths, supporting leading ./ and native Windows separators.
+- Accept successful robocopy status codes even when PowerShell native-command error preferences are enabled, without changing the caller's preference.
+- Check package manifests against actual source VERSION and skill inventory, and reject invalid archive members and Windows path aliases.
+
+Python minimum remains 3.10. Contract schemas and existing toolkit command formats remain unchanged. See [validation and package usage](docs/RELEASE_2.2.0_TH.md).
+
 ## 2.1.0 — 2026-11-11
 
 ### Correctness fixes

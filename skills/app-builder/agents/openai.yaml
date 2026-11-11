@@ -1,4 +1,4 @@
 interface:
-  display_name: "สร้างโปรแกรมตามโจทย์"
-  short_description: "สร้างและต่อยอดโปรแกรมที่รันและตรวจรับได้จริง"
-  default_prompt: "ใช้ $app-builder สร้างหรือขยายโปรแกรมตามโจทย์ เลือกเทคโนโลยีให้เหมาะกับโครงการ และตรวจเส้นทางใช้งานหลักให้รันได้จริง"
+  display_name: "Application Builder"
+  short_description: "Build and extend runnable applications"
+  default_prompt: "Use $app-builder to implement the requested behavior in the existing project or a suitable new application, then verify its main usage path."

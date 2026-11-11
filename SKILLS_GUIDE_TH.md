@@ -18,8 +18,8 @@
 ใน Codex ส่งคำสั่งนี้เพื่อให้สกิลตัวติดตั้งดาวน์โหลดทั้งสามโฟลเดอร์:
 
 ```text
-ใช้ $skill-installer ติดตั้งสกิลจาก repository nal2awitname/codex-programming-skills
-ที่ paths skills/code-review, skills/app-builder และ skills/debug-and-fix
+Use $skill-installer to install skills from nal2awitname/codex-programming-skills
+at paths skills/code-review, skills/app-builder, and skills/debug-and-fix.
 ```
 
 หากมีสกิลชื่อเดียวกันอยู่แล้ว ให้เลือกว่าจะเก็บของเดิมหรือเปลี่ยนชื่อชุดใหม่ก่อนแทนที่
@@ -50,19 +50,19 @@ Codex อ่านชื่อและ description เพื่อเลือ�
 ## ตัวอย่างงานที่ระบุผลลัพธ์ชัดเจน
 
 ```text
-ใช้ $code-review ตรวจการเปลี่ยนแปลงจาก main ถึง branch ปัจจุบัน
-รายงานเฉพาะบั๊กที่ยืนยันได้ พร้อมเงื่อนไขที่เกิดและ path:line
+Use $code-review to review the current branch against main.
+Report only evidenced bugs with their triggers and path:line locations.
 ```
 
 ```text
-ใช้ $app-builder เพิ่ม API จัดการสินค้าในโปรเจกต์นี้
-ใช้ stack เดิม เก็บข้อมูลในฐานข้อมูลเดิม รองรับเพิ่ม/แก้/ลบ/ค้นหา
-พร้อมคำสั่งรันและทดสอบกรณี input ไม่ถูกต้อง
+Use $app-builder to add a product management API to this project.
+Use the existing stack and database; support create, update, delete, and search.
+Provide run commands and tests for invalid input.
 ```
 
 ```text
-ใช้ $debug-and-fix ตรวจ error ด้านล่าง ทำซ้ำอาการในเครื่อง
-แก้สาเหตุโดยรักษา API เดิม และรัน regression test ที่เกี่ยวข้อง
+Use $debug-and-fix to reproduce the following error locally.
+Fix the cause while preserving the existing API and run relevant regression tests.
 ```
 
 ## เลือก toolkit สำหรับงานวิเคราะห์และสร้างใหม่
@@ -74,4 +74,19 @@ Codex อ่านชื่อและ description เพื่อเลือ�
 
 ติดตั้งสกิลเพิ่มผ่าน `$skill-installer` โดยระบุ path ที่ตรงกับชื่อในตาราง หรือคัดลอกทั้งโฟลเดอร์ไป `.agents/skills/` ห้ามคัดลอกเฉพาะ `SKILL.md` เพราะบางสกิลต้องใช้ `scripts/` และ `references/` ด้วย
 
-รุ่นปัจจุบัน **2.1.0**: ดู [รายการแก้ไข](CHANGELOG.md) และ [วิธีตรวจทั้งรีโป/สร้าง ZIP](README.md#รุ่น-210-และการตรวจสอบ)
+รุ่นปัจจุบัน **2.2.0**: ดู [รายการแก้ไข](CHANGELOG.md) และ [วิธีตรวจทั้งรีโป/สร้าง ZIP](README.md#ทดสอบและสร้างแพ็กเกจจริง)
+
+
+## ตัวติดตั้งและแพ็กเกจรุ่น 2.2.0
+
+คำสั่งสกิลและ metadata เป็นภาษาอังกฤษเพื่อลดความกำกวมในการเรียกใช้ AI ตอบภาษาของผู้ใช้ได้ แต่โค้ดและ configuration ที่สร้างต้องเป็นภาษาอังกฤษ ตัวตรวจแยกเอกสารภาษาไทยออกจากไฟล์โค้ดและ code blocks
+
+ใช้ source ZIP เพื่อรับตัวติดตั้งและตัวตรวจแพ็กเกจครบ หรือเลือก ZIP รายสกิลและคัดลอกทั้งโฟลเดอร์ หลังแตก source bundle:
+
+```sh
+python -B scripts/install_skills.py --list
+python -B scripts/install_skills.py --all --destination ../my-project/.agents/skills --dry-run
+python -B scripts/install_skills.py --all --destination ../my-project/.agents/skills
+```
+
+หากปลายทางมีสกิลชื่อเดิม ตัวติดตั้งจะหยุดและไม่เปลี่ยนไฟล์เดิม เลือกปลายทางใหม่หรือสำรองและย้ายสำเนาเดิมด้วยตนเองก่อนติดตั้ง รุ่นนี้ไม่แอบแทนที่สกิลที่ใช้งานอยู่

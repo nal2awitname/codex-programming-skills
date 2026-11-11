@@ -280,7 +280,7 @@ class ToolkitAcceptance(unittest.TestCase):
     def test_observation_unicode_line_separators_round_trip_and_export(self):
         ws = self.workspace()
         record = observation()
-        record["scenario"] = "Thai ไทย\u0085next\u2028line\u2029paragraph"
+        record["scenario"] = "Unicode Ω\u0085next\u2028line\u2029paragraph"
         tool.add_observation(ws, record)
         self.assertEqual(tool.read_observations(ws / "analyst/observations.jsonl"), [record])
         self.write_contract(ws, contract(observed=True))

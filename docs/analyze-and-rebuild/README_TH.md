@@ -9,10 +9,10 @@
 แนบไฟล์หรือส่งลิงก์โปรแกรม แล้วเรียกสกิลที่ติดตั้งไว้:
 
 ```text
-ใช้ $analyze-and-rebuild วิเคราะห์ภาษาและการทำงานของโปรแกรมนี้
-แยกส่วนประกอบ อธิบายหลักการ แล้วสร้างใหม่จากข้อกำหนดพฤติกรรม
-ห้ามคัดลอกโค้ดต้นฉบับ และจัดผลงานให้พัฒนาต่อใน GitHub ได้
-ปลายทาง GitHub: <owner/repository ของโครงการ>
+Use $analyze-and-rebuild to identify this program's languages and behavior.
+Map components, explain principles, and rebuild from a behavioral contract.
+Do not copy original code; organize the result for continued development on GitHub.
+GitHub destination: <owner/repository>
 ```
 
 หากต้องการเฉพาะความเข้าใจ ให้ระบุว่า “วิเคราะห์อย่างเดียว ยังไม่ต้องสร้างใหม่” สกิลจะแยกสิ่งที่ตรวจพบ สิ่งที่อนุมาน และสิ่งที่ยังไม่ทราบ ไม่อ้างว่ารู้ประวัติการเขียนหรือส่วนที่เข้าถึงไม่ได้

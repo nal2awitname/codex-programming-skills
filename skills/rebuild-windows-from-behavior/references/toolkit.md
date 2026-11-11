@@ -1,4 +1,4 @@
-# Runnable toolkit 2.1.0
+# Runnable toolkit 2.2.0
 
 Use Python 3.10 or later; the bundled CLI has no third-party dependencies.
 Resolve `SKILL_DIR` to the actual folder containing SKILL.md. All output paths must
@@ -116,7 +116,10 @@ cannot be reliably classified as copied code by a schema validator.
 Open a fresh builder context and give only the export. Use a separate OS/container
 account or environment without original mounts/network access if enforced
 isolation is required. A subagent on a shared filesystem still has shared access.
-If using the same context, record its prior original exposure. Never claim stronger
+If the analyst saw original implementation and a fresh builder is unavailable,
+deliver the audited handoff and record that implementation remains incomplete.
+A context exposed only to black-box behavior may implement from the contract;
+record that exposure without claiming enforced isolation. Never claim stronger
 separation than actually used.
 
 ## Compare separately captured results

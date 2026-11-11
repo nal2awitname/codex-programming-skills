@@ -1,79 +1,39 @@
 ---
 name: debug-and-fix
-description: "วิเคราะห์และแก้บั๊กจาก error, test ที่ล้มเหลว หรือพฤติกรรมผิดคาด พร้อมหลักฐานว่าสาเหตุได้รับการแก้ ใช้เมื่อผู้ใช้ต้องการแก้ปัญหาในโปรแกรม ไม่ใช่การตรวจโค้ดทั่วไปหรือสร้างฟีเจอร์ใหม่"
+description: "Diagnose and fix existing bugs, errors, failing tests, and unexpected runtime behavior. Use when the user wants a defect repaired with evidence that the affected behavior works. Route new functionality to app-builder and review-only work to code-review."
 ---
 
-# วิเคราะห์และแก้บั๊ก
+# Diagnose and fix defects
 
-เปลี่ยนอาการผิดพลาดให้เป็นสาเหตุที่ตรวจสอบได้ แก้เฉพาะส่วนที่จำเป็น
-และยืนยันผลด้วยพฤติกรรมที่ผู้ใช้ต้องการ ใช้ภาษาไทยเมื่อผู้ใช้ใช้ภาษาไทย
-คงชื่อไฟล์ คำสั่ง และข้อความ error ตามต้นฉบับเพื่อค้นหาต่อได้
+Find a supported cause, make a focused repair, and verify the user's expected behavior. Respond in the user's language; write generated code, comments, identifiers, commands, and machine-facing configuration in English. Preserve exact existing API names and error text when referencing evidence.
 
-## เข้าใจอาการและขอบเขต
+## Route and scope
 
-- อ่านคำสั่งของโครงการและดูสถานะไฟล์ก่อนแก้ไข
-- ระบุพฤติกรรมที่คาดหวัง พฤติกรรมที่เกิดจริง และจุดที่สังเกตพบปัญหา
-- ใช้ error, stack trace, input, เวอร์ชัน และขั้นตอนที่ผู้ใช้ให้เป็นจุดเริ่มต้น
-- หากข้อมูลไม่ครบ ให้ตรวจโค้ดและสภาพแวดล้อมที่เข้าถึงได้ก่อนถามเพิ่ม
-- ถ้าคำตอบจำเป็นต่อการแยกสาเหตุ ให้ถามเฉพาะข้อมูลที่เปลี่ยนแนวทางวิเคราะห์
-- จำกัดการแก้ให้อยู่ในปัญหาที่ได้รับมอบหมาย เลื่อน refactor ที่ไม่เกี่ยวข้องออกไป
+- Read repository instructions, relevant configuration, and working-tree status before editing. Preserve user changes and public contracts.
+- Begin with supplied errors, traces, input, versions, and reproduction steps. Inspect accessible code and environment before asking for more information.
+- Use `app-builder` for new capabilities and `code-review` for findings without requested repairs. Keep unrelated refactoring and pre-existing failures outside the patch.
 
-## สร้างหลักฐานก่อนแก้
+## Workflow
 
-- ทำให้อาการเกิดซ้ำด้วยกรณีเล็กที่สุดที่ยังแสดงความผิดพลาดจริง
-- ใช้คำสั่งทดสอบหรือวิธีรันที่โครงการมีอยู่ ตรวจ scripts และ lockfile ก่อนเลือกเครื่องมือ
-- บันทึก input, คำสั่ง, ผลที่คาดหวัง และผลที่เกิดขึ้นให้ทำซ้ำได้
-- หากมี test ที่ล้มเหลว ให้ตรวจว่าทดสอบพฤติกรรมตามสัญญาของระบบจริงหรือไม่
-- อย่าสรุปว่าข้อความ error บรรทัดสุดท้ายคือสาเหตุ ตรวจต้นทางของข้อมูลด้วย
-- ถ้าทำซ้ำไม่ได้ ให้แยกข้อเท็จจริง สมมติฐาน และข้อจำกัดอย่างชัดเจน
-- ใช้ static evidence เพื่อเดินหน้าต่อได้ แต่ระบุเมื่อยังไม่ได้ยืนยันด้วยการรัน
+1. **Reproduce.** State expected and actual behavior. Use the smallest case that still demonstrates the defect, following existing scripts and lockfiles. Record the input, command, and observed failure. If reproduction is unavailable, label static evidence and uncertainty explicitly.
+2. **Localize.** Trace input, conversions, state, and errors through callers and callees. Test a focused hypothesis using a discriminating check; compare passing and failing cases with minimal differences. Distinguish application defects from configuration, fixtures, access, and external-service failures.
+3. **Repair.** Select the smallest complete change that addresses the supported cause. For substantial work, communicate a short action plan and acceptance check. Preserve compatibility; inspect callers before changing a public contract. Remove temporary instrumentation unless it provides lasting diagnostic value.
+4. **Verify.** Rerun the original failure case and relevant normal and boundary cases. Add a meaningful regression test when maintainable; confirm that it fails before the fix when practical. Run related project checks, then inspect the diff for unintended files and scope changes.
 
-## หาสาเหตุที่อธิบายอาการได้
+## Repair constraints
 
-ไล่จากจุดรับ input ผ่านการแปลงข้อมูลและสถานะ ไปยังผลลัพธ์ที่ผิด
-อ่านผู้เรียก ฟังก์ชันที่เกี่ยวข้อง และสัญญาระหว่างส่วนต่าง ๆ ก่อนแก้ปลายเหตุ
+- Do not reset, revert, or overwrite unrelated work.
+- Do not swallow exceptions, disable validation, add misleading fallbacks, skip tests, weaken assertions, or change expected values to match a defect.
+- Change a test only when evidence establishes that its contract is wrong or intentionally changed. Document a workaround's actual limitations when direct repair is blocked.
+- Use logs only as needed; do not expose secrets or personal data.
 
-- สร้างสมมติฐานที่ตรวจหักล้างได้ แล้วเลือกการตรวจที่แยกสาเหตุได้ชัดที่สุด
-- เปรียบเทียบกรณีที่ผ่านกับกรณีที่ล้มเหลว โดยเปลี่ยนตัวแปรให้น้อยที่สุด
-- ตรวจขอบเขตข้อมูล สถานะก่อนหน้า async timing หรือ dependency ตามหลักฐานที่พบ
-- ใช้ logs หรือ instrumentation เท่าที่จำเป็น โดยไม่แสดง secrets หรือข้อมูลส่วนบุคคล
-- แยกบั๊กในโปรแกรมออกจาก config, ข้อมูลทดสอบ, สิทธิ์เข้าถึง และบริการภายนอก
-- ก่อนแก้ อธิบายสายเหตุสั้น ๆ ว่าจุดใดทำให้เกิดอาการ และเหตุใดการแก้จึงตรงจุด
+## Recovery and completion
 
-## แก้โดยรักษาสัญญาของระบบ
+- Read and classify each failure before retrying; repeat a command only after a relevant condition or hypothesis changes.
+- Keep environment failures separate from patch results. Do not upgrade broad dependency sets, alter global configuration, or touch production just to make a check pass.
+- If a required artifact or access is missing, complete independent work and report the exact missing item and the next useful check. Do not claim the defect is resolved from static inspection alone.
+- Stop when the failing behavior and affected checks pass, or when a specific external blocker prevents further progress. State which outcome applies.
 
-- เลือกการแก้ที่เล็กและครบถ้วน โดยรักษา API และพฤติกรรมที่ผู้ใช้ยังต้องใช้
-- หากต้องเปลี่ยนสัญญาสาธารณะ ให้ตรวจผู้เรียกและผลกระทบก่อนตัดสินใจ
-- รักษางานที่ผู้ใช้แก้ไว้ ห้าม reset, revert หรือเขียนทับงานเดิมเพื่อให้เริ่มง่ายขึ้น
-- ไม่แก้ unrelated failures เพียงเพื่อทำให้คำสั่งตรวจทั้งหมดเป็นสีเขียว
-- ไม่กลืน exception, ปิด validation หรือเพิ่ม fallback เพื่อซ่อนสาเหตุ
-- ไม่ skip test, ลด assertion หรือเปลี่ยน expected result ให้ตรงกับบั๊ก
-- แก้ test ได้เมื่อหลักฐานยืนยันว่าสัญญาที่ต้องการเปลี่ยนจริงหรือ test ผิด
-- หากเพิ่ม workaround ให้ระบุข้อจำกัดและเหตุผลที่ยังแก้สาเหตุโดยตรงไม่ได้
-- นำ instrumentation ชั่วคราวออก เว้นแต่มีประโยชน์จริงต่อการดูแลระบบ
+## Delivery
 
-## ตรวจว่าบั๊กหายและพฤติกรรมเดิมยังทำงาน
-
-- รันกรณีที่เคยล้มเหลวด้วย input เดิม และเทียบผลกับพฤติกรรมที่คาดหวัง
-- เพิ่ม regression test เมื่อจับความผิดพลาดนี้ได้อย่างมีความหมายและดูแลต่อได้
-- หากทำได้ ให้ยืนยันว่า test ใหม่นั้นล้มเหลวกับโค้ดก่อนแก้และผ่านหลังแก้
-- ถ้าไม่มีชุดทดสอบ ใช้คำสั่งตรวจหรือขั้นตอนทำซ้ำที่แสดงผลลัพธ์สังเกตได้
-- ทดสอบกรณีปกติและขอบเขตใกล้เคียงที่ได้รับผลกระทบจากการแก้
-- รันชุดตรวจที่สัมพันธ์กับส่วนที่เปลี่ยน แล้วขยายเมื่อมีความเสี่ยงหรือหลักฐานใหม่
-- ตรวจ diff เพื่อหาการเปลี่ยนแปลงเกินขอบเขต และให้แน่ใจว่าไม่มีไฟล์ชั่วคราวหลุดมา
-
-## เมื่อสภาพแวดล้อมขัดขวางการตรวจ
-
-รายงานข้อผิดพลาดเดิมของเครื่องหรือบริการแยกจากผลของ patch
-การรันไม่ได้เพราะ dependency ขาดหรือเชื่อมต่อไม่ได้ ไม่ใช่หลักฐานว่าการแก้ผ่าน
-
-- ลองใหม่เมื่อมีสมมติฐานหรือสภาวะที่เปลี่ยนไป หยุดการรันซ้ำที่ได้ข้อมูลเดิม
-- อย่าเปลี่ยน config ส่วนกลาง อัปเกรด dependency เป็นชุด หรือแตะระบบจริงเพื่อบังคับให้ตรวจผ่าน
-- ถ้าติดสิ่งที่ต้องให้ผู้ใช้ช่วย ให้บอกข้อมูลที่ขาดและสิ่งที่ยังตรวจยืนยันได้
-- อย่าอ้างว่าบั๊กหายหากยังมีเพียงการอ่านโค้ดหรือการทดสอบไม่ครอบคลุมอาการเดิม
-
-## ส่งมอบ
-
-บอกผลลัพธ์ก่อน แล้วสรุปสาเหตุ การแก้ และไฟล์สำคัญอย่างกระชับ
-ระบุคำสั่งหรือขั้นตอนตรวจที่รันจริงพร้อมผล และข้อจำกัดที่ยังเหลือ
-ถ้ายังแก้ไม่สำเร็จ ให้ระบุสมมติฐานที่ตัดทิ้ง หลักฐานล่าสุด และขั้นต่อไปที่ทำได้จริง
+Lead with the repair outcome. Summarize the supported cause, focused change, key files, actual verification commands/results, and remaining gaps. If unresolved, report the strongest current evidence and a concrete next step without presenting a hypothesis as a confirmed cause.

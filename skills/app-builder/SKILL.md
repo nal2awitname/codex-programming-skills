@@ -1,71 +1,41 @@
 ---
 name: app-builder
-description: "สร้างหรือขยายโปรแกรมให้ใช้งานได้ตามโจทย์ ตั้งแต่ CLI, API และ desktop ถึงแอปอื่น ๆ ในโครงการใหม่หรือเดิม (build or extend working applications). ใช้เมื่อต้องลงมือพัฒนาความสามารถ; งานตรวจโค้ดอย่างเดียวใช้ code-review และงานหาสาเหตุบั๊กเดิมใช้ debug-and-fix."
+description: "Build or extend runnable applications, including CLI tools, APIs, desktop apps, and existing projects. Use for implementation of new capabilities. Route existing defects to debug-and-fix and review-only requests to code-review."
 ---
 
-# สร้างโปรแกรมที่ใช้งานได้
+# Build applications
 
-เปลี่ยนความต้องการของผู้ใช้เป็นโปรแกรมที่รันและตรวจรับได้ โดยเลือกแนวทางให้เหมาะกับโครงการและเครื่องมือที่มีจริง
-สกิลนี้เป็นแนวทางพัฒนาโค้ด ไม่ได้เพิ่ม runtime, connector, สิทธิ์เข้าบัญชี หรือบริการที่สภาพแวดล้อมยังไม่มี
+Turn the requested behavior into a working, verifiable application. This skill supplies a workflow, not a runtime, service, connector, or account access. Respond in the user's language; write generated code, comments, identifiers, commands, and machine-facing configuration in English.
 
-## กำหนดผลลัพธ์
+## Route and scope
 
-- ดึงผู้ใช้เป้าหมาย งานหลัก ข้อมูลเข้า ผลลัพธ์ และเงื่อนไขความสำเร็จจากโจทย์
-- ระบุรูปแบบที่ผู้ใช้ต้องการ เช่น CLI, API, desktop หรือส่วนขยายของโปรแกรมเดิม
-- ให้ข้อกำหนดของผู้ใช้และโครงการเป็นหลัก ไม่เปลี่ยนประเภทแอปเพราะมีเครื่องมือบางชนิดพร้อมใช้อยู่
-- เมื่อรายละเอียดไม่ครบ ใช้สมมติฐานที่แก้กลับได้และบอกสมมติฐานนั้น
-- ถ้าข้อมูลที่ขาดเปลี่ยนพฤติกรรมหลัก ความเข้ากันได้ หรือวิธีเก็บข้อมูลอย่างมีนัยสำคัญ ให้ถามเฉพาะจุดนั้น
-- ระหว่างรอคำตอบ ทำส่วนที่ไม่ขึ้นกับข้อมูลที่ขาดต่อได้
-- แปลงงานหลักเป็นเกณฑ์ตรวจรับที่สังเกตได้ รวมผลลัพธ์เมื่อไม่มีข้อมูลหรือข้อมูลไม่ถูกต้อง
+- Preserve the requested application type and the project's existing language, framework, package manager, and conventions unless a requirement justifies changing them.
+- Use `debug-and-fix` for existing defects, `code-review` for findings without implementation, and `windows-simulator` for preparing a Windows test host. Use a reconstruction skill only for an explicitly requested independent rebuild.
+- Read repository instructions and the working-tree status. Preserve unrelated files and user edits.
+- Infer reversible details from available context. Ask only for missing information that materially changes behavior, compatibility, or data handling; continue independent work while waiting.
 
-## เข้าใจโครงการก่อนเลือกวิธี
+## Workflow
 
-- โครงการเดิม: อ่านคำแนะนำประจำโครงการ จุดเริ่มรัน manifest และโค้ดข้างเคียงที่เกี่ยวข้อง
-- ใช้ภาษา framework รูปแบบโค้ด ระบบทดสอบ และ package manager เดิม เว้นแต่โจทย์ต้องเปลี่ยน
-- ตรวจจุดเชื่อมต่อที่ต้องรักษา เช่น command arguments, HTTP contract, file format และ schema
-- โครงการใหม่: เลือกชุดเทคโนโลยีที่เล็กพอสำหรับโจทย์ รองรับเครื่องเป้าหมาย และรันได้ในสภาพแวดล้อมจริง
-- ตรวจ runtime และเครื่องมือที่มี ก่อนกำหนดคำสั่ง build หรือวิธีเปิดโปรแกรม
-- ไม่ถือว่ามีไลบรารีหรือบริการติดตั้งอยู่เพียงเพราะเคยพบในโครงการอื่น
-- หากไม่แน่ใจ API หรือวิธีใช้เวอร์ชันปัจจุบัน ให้ตรวจเอกสารทางการที่เข้าถึงได้ก่อนนำมาใช้
+1. **Inspect.** Identify users, inputs, outputs, existing entrypoints, public contracts, dependencies, and available runtimes. Check current official documentation when a required API or version is uncertain.
+2. **Plan.** Define observable acceptance criteria for the main path and relevant empty, invalid, or failure states. For nontrivial work, give a short action plan tied to those criteria; omit planning ceremony for a small change.
+3. **Implement.** Complete one path from real input through processing to usable output, then cover the remaining criteria. Keep changes cohesive. Add storage, accounts, services, or frameworks only when requirements need them.
+4. **Verify.** Run the project's applicable build/check commands and exercise the changed behavior. Use meaningful acceptance or regression tests when they protect important behavior. Fix failures within scope and rerun affected checks.
 
-## ทำเส้นทางใช้งานหลักให้ครบ
+## Behavior requirements
 
-- เริ่มจากเส้นทางหนึ่งที่เชื่อมข้อมูลเข้า การประมวลผล และผลลัพธ์จริงได้ครบ แล้วขยายตามเกณฑ์ตรวจรับ
-- CLI: ตรวจ argument, stdin/stdout ที่เกี่ยวข้อง, ข้อความผิดพลาด และ exit status ตามการใช้งาน
-- API: ตรวจ request/response contract, validation, error response และพฤติกรรมเมื่อ dependency ล้มเหลว
-- Desktop: ตรวจการเปิดโปรแกรม การโต้ตอบหลัก สถานะระหว่างทำงาน และการปิดหรือบันทึกตามโจทย์
-- แอปรูปแบบอื่นให้กำหนดวงจรใช้งานตามผู้ใช้จริง ไม่บังคับให้กลายเป็นเว็บหรือ API
-- ใช้ข้อผิดพลาดที่ช่วยผู้ใช้แก้ปัญหา และจัดการสถานะว่างหรือกำลังทำงานเมื่อเส้นทางนั้นมีจริง
-- แก้โค้ดในขอบเขตที่ต้องใช้ ส่งต่อรูปแบบเดิม และรักษางานที่ผู้ใช้แก้ค้างไว้
-- ไม่เพิ่มระบบบัญชี dashboard, framework หรือโครงสร้างแยกบริการ ถ้าเกณฑ์ตรวจรับยังไม่ต้องใช้
+- CLI: validate arguments, relevant stdin/stdout, errors, and exit status. API: verify request/response contracts, validation, and dependency failure behavior.
+- UI: exercise the principal interaction and applicable loading, empty, error, save, and shutdown states. A successful build alone does not verify interaction.
+- Persistence: save, reopen, and verify data after restart when durability is required. Choose storage for the actual lifetime and sharing needs.
+- Integration: verify a real response with available tools. Mark mocks and sample data clearly; do not report a button, placeholder, or in-memory value as a working external connection or durable storage.
+- Keep secrets outside source control; document required configuration with safe examples.
 
-## ข้อมูลและการเชื่อมต่อ
+## Recovery and completion
 
-- ถ้าโจทย์ต้องเก็บข้อมูล ให้บันทึก อ่านกลับ และแก้ไขได้จริงด้วยวิธีที่เหมาะกับรูปแบบการใช้งาน
-- เลือกที่เก็บข้อมูลจากอายุข้อมูล การใช้ร่วมกัน และสภาพแวดล้อมเป้าหมาย ไม่เลือกเพียงเพราะสาธิตง่าย
-- ตรวจว่าข้อมูลยังอยู่หลังเริ่มโปรแกรมใหม่ เมื่อความคงอยู่เป็นส่วนหนึ่งของโจทย์
-- ใช้ไฟล์ตั้งค่าหรือตัวแปรสภาพแวดล้อมสำหรับค่าที่เปลี่ยนตามเครื่อง พร้อมตัวอย่างที่ไม่มีข้อมูลลับ
-- ตรวจ integration จากเครื่องมือ โค้ด และการตอบกลับที่เข้าถึงได้จริง ไม่อ้างว่าเชื่อมสำเร็จจากการมีปุ่มหรือหน้าจอ
-- ใช้ mock หรือ sample data สำหรับทดสอบหรือสาธิตได้ โดยแสดงสถานะให้ชัดและไม่รายงานเป็นการเชื่อมต่อจริง
-- เมื่อ integration ที่จำเป็นยังขาด credentials หรือการเข้าถึง ให้ทำส่วนอิสระต่อ และระบุสิ่งที่ยังต้องเติมอย่างเจาะจง
-- ไม่ฝังข้อมูลตัวอย่างให้ดูเหมือนข้อมูลจริง และไม่ถือว่าข้อมูลในหน่วยความจำแทน persistence ได้เมื่อโจทย์ต้องให้ข้อมูลคงอยู่
+- Diagnose a failed command before retrying. Separate code defects from unavailable dependencies, credentials, services, or platform support; keep supported work moving and state the exact blocker.
+- Do not suppress errors, disable validation, weaken tests, or change unrelated systems to force success.
+- Stop expanding scope when the agreed criteria pass and material concerns are resolved. Do not repeat broad checks without a changed input or new concern.
+- Continue authorized development and verification without redundant approval. Publish, deploy, or send external messages only within the user's authorized scope and applicable tool rules.
 
-## ตรวจรับด้วยพฤติกรรม
+## Delivery
 
-- ใช้คำสั่ง run, build หรือ check ของโครงการ และยืนยันว่าผลที่รายงานมาจากคำสั่งที่รันจริง
-- ทดสอบเส้นทางหลักด้วยข้อมูลที่แทนการใช้งานได้ พร้อมกรณีขอบหรือข้อผิดพลาดที่มีผลต่อการเปลี่ยนแปลง
-- เพิ่ม automated test เมื่อช่วยคุ้มครองพฤติกรรมสำคัญ ไม่เพิ่มเพียงเพื่อสะท้อนโครงสร้าง implementation
-- หากมี UI และมีเครื่องมือให้เปิดใช้งาน ตรวจการโต้ตอบที่สำคัญ ไม่สรุปว่าใช้งานได้จาก build ผ่านเพียงอย่างเดียว
-- แยกสิ่งที่ผ่าน สิ่งที่ล้มเหลว และสิ่งที่ยังตรวจไม่ได้ พร้อมเหตุผลที่ตรงกับสภาพแวดล้อม
-- เมื่อพบข้อผิดพลาด แก้สาเหตุในขอบเขตงานแล้วตรวจส่วนที่ได้รับผลกระทบซ้ำ
-- เมื่อเกณฑ์ตรวจรับครบและไม่มีข้อกังวลค้าง หยุดขยายขอบเขตหรือรันทดสอบซ้ำโดยไม่มีเหตุผลใหม่
-
-## ส่งมอบให้ใช้ต่อได้
-
-- ส่งตำแหน่งโค้ด วิธีติดตั้งหรือเตรียมค่าที่จำเป็น คำสั่งรัน และตัวอย่างเส้นทางใช้งานหลัก
-- สรุปความสามารถที่ทำเสร็จ หลักฐานตรวจรับ และข้อจำกัดที่มีผลต่อการใช้งาน
-- หากรันในเครื่องนี้ไม่ได้ ให้ส่งโค้ดและคำสั่งที่เหมาะกับเป้าหมาย พร้อมระบุการตรวจที่ยังไม่ได้ทำ
-- ไม่เรียก mock, draft หรือโปรแกรมที่ยังไม่ผ่านเกณฑ์หลักว่าเป็นระบบพร้อมใช้งานจริง
-- ทำงานต่อภายในสิทธิ์และขอบเขตที่ผู้ใช้ให้ไว้ ไม่ขออนุมัติซ้ำสำหรับการพัฒนาและตรวจสอบที่ได้รับอนุญาตแล้ว
-- การ deploy, publish, เปลี่ยนบริการภายนอก หรือส่งข้อความ เป็นงานเพิ่มเติมเมื่อไม่ได้อยู่ในคำขอหรือการอนุญาตเดิม
-- หากผู้ใช้อนุญาตงานภายนอกนั้นแล้ว ให้ทำตามขอบเขตเดิมและกติกาของเครื่องมือ โดยไม่สร้างขั้นตอนอนุมัติเพิ่มจากสกิลนี้
+Lead with the usable result. Link important files and give the actual setup/run command, one representative usage example, checks run with results, and any remaining limitation. Distinguish completed functionality, mocked behavior, and unverified platform or integration work.

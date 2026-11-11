@@ -60,6 +60,9 @@ def add_evidence(work, evidence_id, relative, start, end, summary):
     work, meta, index = unchanged(work)
     if not re.fullmatch(r"E-[A-Za-z0-9_-]+", evidence_id) or not summary.strip():
         raise ValueError("use an E-identifier and a nonempty evidence summary")
+    # Inventory paths always use forward slashes. Accept normal host-relative
+    # paths (including ./ and Windows separators) without changing that format.
+    relative = Path(relative).as_posix()
     item = next((x for x in index["files"] if x["path"] == relative), None)
     if not item or not (1 <= start <= end <= item.get("line_count", 0)):
         raise ValueError("evidence must reference an inspected text file and valid line range")

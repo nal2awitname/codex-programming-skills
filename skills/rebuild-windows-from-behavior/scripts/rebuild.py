@@ -18,7 +18,7 @@ import sys
 import tempfile
 import xml.etree.ElementTree as ET
 
-VERSION = "2.0.1"
+VERSION = "2.1.0"
 SKIP_DIRS = {".git", ".svn", "node_modules", "__pycache__", ".venv", "venv"}
 EVIDENCE = {"observed", "source-confirmed", "public-spec-confirmed", "proposed"}
 MACHINES = {0x14C: "x86", 0x8664: "x64", 0xAA64: "ARM64", 0x1C4: "ARM32"}
@@ -428,11 +428,17 @@ def read_observations(path):
     path = regular_file(path)
     records = []
     seen = set()
-    for number, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
+    # JSON strings can contain literal U+0085/U+2028/U+2029. splitlines()
+    # treats those characters as record delimiters and corrupts valid JSONL.
+    # read_text handles CRLF/CR; only LF separates records after that step.
+    for number, line in enumerate(path.read_text(encoding="utf-8-sig").split("\n"), 1):
         if not line.strip():
             continue
-        item = json.loads(line, object_pairs_hook=unique_pairs, parse_constant=reject_constant)
-        validate_observation(item)
+        try:
+            item = json.loads(line, object_pairs_hook=unique_pairs, parse_constant=reject_constant)
+            validate_observation(item)
+        except (ValueError, TypeError, KeyError) as error:
+            raise Invalid(f"Invalid observation at line {number}: {error}") from error
         if item["id"] in seen:
             raise Invalid(f"Duplicate observation ID at line {number}")
         seen.add(item["id"])
@@ -457,8 +463,18 @@ def add_observation(workspace, record):
     path = regular_file(Path(workspace) / "analyst" / "observations.jsonl")
     if record["id"] in {item["id"] for item in read_observations(path)}:
         raise Invalid("Observation ID already exists; preserve the earlier observation")
+    # A valid last JSONL record need not have a trailing newline. Preserve its
+    # bytes while inserting a delimiter before the new record when necessary.
+    with path.open("rb") as stream:
+        stream.seek(0, os.SEEK_END)
+        needs_newline = False
+        if stream.tell():
+            stream.seek(-1, os.SEEK_END)
+            needs_newline = stream.read(1) != b"\n"
     # Single-writer journal. Never evaluate commands or target-provided strings.
     with path.open("a", encoding="utf-8", newline="\n") as stream:
+        if needs_newline:
+            stream.write("\n")
         stream.write(json.dumps(record, ensure_ascii=False, allow_nan=False) + "\n")
     return {"recorded": record["id"], "caveat": "User-supplied record; tool did not execute the reference."}
 

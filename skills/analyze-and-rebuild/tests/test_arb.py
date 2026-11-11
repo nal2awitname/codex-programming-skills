@@ -10,9 +10,9 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from arbkit.common import digest, read_json, write_json
+from arbkit.common import digest, file_hash, parse_json, read_json, write_json
 from arbkit.inventory import scan
-from arbkit.runner import execute, run, verification_current
+from arbkit.runner import comparable, execute, run, verification_current
 from arbkit.reporting import report
 from arbkit.workflow import add_evidence, attach_observation, handoff, initialize, readiness, seal
 
@@ -165,6 +165,85 @@ class WorkbenchTests(unittest.TestCase):
         self.assertLessEqual(len(result["stdout"].encode()), 32)
         self.assertFalse(result["valid"])
 
+    def test_background_descendant_cleanup_cannot_be_reported_as_complete_capture(self):
+        code = ("import subprocess, sys; "
+                "subprocess.Popen([sys.executable, '-B', '-c', "
+                "'import time; time.sleep(1.5); print(123)']); print(7)")
+        result = run({"argv": [sys.executable, "-B", "-c", code], "cwd": str(self.base)}, "")
+        self.assertEqual(result["exit_code"], 0)
+        self.assertTrue(result["capture_incomplete"])
+        self.assertFalse(result["valid"])
+
+    def test_json_capture_rejects_duplicate_keys_and_float_overflow(self):
+        for text in ['{"sum": 0, "sum": 12}', '{"nested": {"x": 1, "x": 2}}',
+                     '1e400', 'NaN', 'Infinity']:
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                comparable({"valid": True, "stdout": text, "stderr": "", "exit_code": 0}, "json")
+        self.assertEqual(parse_json('{"value": 1.5}'), {"value": 1.5})
+
+    def test_ambiguous_reference_output_cannot_be_used_for_equivalence(self):
+        self.prepare()
+        write_json(self.reference_command, {"argv": [sys.executable, "-B", "-c",
+            "print('{\"sum\": 0, \"sum\": 12}')"], "cwd": str(self.source)})
+        result = execute(self.work, self.reference_command, "observe")
+        self.assertFalse(result["success"])
+        records = read_json(self.work / "analyst/observations.json")["results"]
+        self.assertTrue(all(not row["valid"] for row in records))
+        self.assertIn("duplicate JSON key", records[0]["reason"])
+
+    def test_verification_becomes_stale_if_reference_observation_changes(self):
+        self.prepare()
+        execute(self.work, self.reference_command, "observe")
+        rebuilt = self.base / "rebuilt"
+        rebuilt.mkdir()
+        command = self.base / "rebuilt-command.json"
+        write_json(command, {"argv": [sys.executable, "-B", "-c",
+            "import json, sys; print(json.dumps({'sum': sum(json.loads(sys.stdin.read()))}))"],
+            "cwd": str(rebuilt)})
+        self.assertTrue(execute(self.work, command, "verify")["success"])
+        record = read_json(self.work / "analyst/verification.json")
+        self.assertTrue(verification_current(self.work, record))
+        observations_path = self.work / "analyst/observations.json"
+        original = observations_path.read_bytes()
+        observed = read_json(observations_path)
+        observed["results"][0]["stdout"] = '{"sum": 999}\n'
+        write_json(observations_path, observed)
+        self.assertFalse(verification_current(self.work, record))
+        observations_path.write_bytes(original)
+        self.assertTrue(verification_current(self.work, record))
+        observations_path.unlink()
+        self.assertFalse(verification_current(self.work, record))
+
+    def test_verification_freshness_checks_original_source(self):
+        self.prepare()
+        rebuilt = self.base / "rebuilt"
+        rebuilt.mkdir()
+        command = self.base / "rebuilt-command.json"
+        write_json(command, {"argv": [sys.executable, "-B", "-c", "print('{}')"], "cwd": str(rebuilt)})
+        execute(self.work, command, "verify")
+        record = read_json(self.work / "analyst/verification.json")
+        self.assertTrue(verification_current(self.work, record))
+        (self.source / "main.py").write_text("print('new reference')\n", encoding="utf-8")
+        self.assertFalse(verification_current(self.work, record))
+
+    def test_command_file_change_during_capture_cannot_be_marked_current(self):
+        self.prepare()
+        rebuilt = self.base / "rebuilt"
+        rebuilt.mkdir()
+        command = self.base / "rebuilt-command.json"
+        replacement = {"argv": [sys.executable, "-B", "-c", "print('{}')"], "cwd": str(rebuilt)}
+        (rebuilt / "app.py").write_text(
+            "import json, sys\nfrom pathlib import Path\n"
+            f"Path({str(command)!r}).write_text({json.dumps(replacement)!r}, encoding='utf-8')\n"
+            "print(json.dumps({'sum': sum(json.loads(sys.stdin.read()))}))\n", encoding="utf-8")
+        write_json(command, {"argv": [sys.executable, "-B", "app.py"], "cwd": str(rebuilt)})
+        original_hash = file_hash(command)
+        self.assertTrue(execute(self.work, command, "verify")["success"])
+        record = read_json(self.work / "analyst/verification.json")
+        self.assertEqual(record["command_file_sha256"], original_hash)
+        self.assertNotEqual(record["command_file_sha256"], file_hash(command))
+        self.assertFalse(verification_current(self.work, record))
+
     def test_symlinks_skips_limits_and_nested_work(self):
         if os.name != "nt":
             (self.source / "linked.py").symlink_to(self.source / "main.py")
@@ -246,6 +325,58 @@ class WorkbenchTests(unittest.TestCase):
                                 capture_output=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.work.exists())
+
+    @unittest.skipUnless(shutil.which("pwsh") or (os.name == "nt" and shutil.which("powershell")),
+                         "native PowerShell runtime is unavailable")
+    def test_powershell_wrapper_records_evidence_and_honors_capture_limit(self):
+        self.prepare()
+        executable = shutil.which("pwsh") or shutil.which("powershell")
+        wrapper = Path(__file__).parents[1] / "scripts/Analyze-Rebuild.ps1"
+        prefix = [executable, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", str(wrapper)]
+        args = ["-Action", "evidence", "-Work", str(self.work), "-EvidenceId", "E-wrapper",
+                "-EvidenceFile", "main.py", "-StartLine", "1", "-EndLine", "5",
+                "-Summary", "Reviewed the collection input and total output."]
+        evidence_path = self.work / "analyst/evidence.json"
+        before = evidence_path.read_bytes()
+        preview = subprocess.run(prefix + args + ["-WhatIf"], capture_output=True, timeout=30)
+        self.assertEqual(preview.returncode, 0, preview.stderr)
+        self.assertEqual(evidence_path.read_bytes(), before)
+        recorded = subprocess.run(prefix + args, capture_output=True, timeout=30)
+        self.assertEqual(recorded.returncode, 0, recorded.stderr)
+        self.assertEqual(read_json(evidence_path)["items"][-1]["id"], "E-wrapper")
+        artifact = self.base / "record with spaces.txt"
+        artifact.write_text("Synthetic output", encoding="utf-8")
+        attached = subprocess.run(prefix + ["-Action", "attach", "-Work", str(self.work),
+            "-EvidenceId", "E-artifact", "-Artifact", str(artifact), "-Method", "Synthetic capture",
+            "-Summary", "Recorded the visible output."], capture_output=True, timeout=30)
+        self.assertEqual(attached.returncode, 0, attached.stderr)
+        self.assertEqual(read_json(evidence_path)["items"][-1]["id"], "E-artifact")
+        limited = subprocess.run(prefix + ["-Action", "observe", "-Work", str(self.work),
+            "-CommandFile", str(self.reference_command), "-OutputLimit", "1"],
+            capture_output=True, timeout=30)
+        self.assertEqual(limited.returncode, 2, limited.stderr)
+        records = read_json(self.work / "analyst/observations.json")["results"]
+        self.assertTrue(all(row["output_limited"] and not row["valid"] for row in records))
+
+    @unittest.skipUnless(shutil.which("pwsh") and os.name != "nt",
+                         "regression uses POSIX executable symlinks and PowerShell")
+    def test_powershell_wrapper_resolves_multiple_python_path_matches(self):
+        executable = shutil.which("pwsh")
+        wrapper = Path(__file__).parents[1] / "scripts/Analyze-Rebuild.ps1"
+        python_paths = []
+        for name in ["python-one", "python-two"]:
+            directory = self.base / name
+            directory.mkdir()
+            (directory / "python").symlink_to(sys.executable)
+            python_paths.append(str(directory))
+        environment = dict(os.environ, PATH=os.pathsep.join(python_paths))
+        initialized = subprocess.run([executable, "-NoLogo", "-NoProfile", "-NonInteractive",
+            "-File", str(wrapper), "-Action", "init", "-Source", str(self.source),
+            "-Work", str(self.work), "-MaxFiles", "12", "-MaxBytes", "4096"],
+            capture_output=True, env=environment, timeout=30)
+        self.assertEqual(initialized.returncode, 0, initialized.stderr)
+        inventory = read_json(self.work / "analyst/inventory.json")
+        self.assertEqual(inventory["limits"], {"max_files": 12, "max_bytes": 4096})
 
 
 if __name__ == "__main__":

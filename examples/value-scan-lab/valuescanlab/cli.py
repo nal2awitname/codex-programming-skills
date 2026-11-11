@@ -31,7 +31,10 @@ def main(argv: list[str] | None = None) -> int:
             return _emit({"error": "io_error"})
         try:
             data = json.loads(text)
-        except (json.JSONDecodeError, RecursionError):
+        # Python's integer digit guard raises ValueError rather than the more
+        # specific JSONDecodeError. Keep decoder limits on the JSON boundary,
+        # with the same named error instead of an uncaught traceback.
+        except (ValueError, RecursionError):
             return _emit({"error": "invalid_json"})
         return _emit(evaluate_scenario(data))
     try:

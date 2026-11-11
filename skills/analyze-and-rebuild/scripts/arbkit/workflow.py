@@ -162,6 +162,7 @@ def _leaks(meta, index, contract, cases):
             for v in value: strings(v)
     strings([contract, cases])
     joined = "\n".join(texts)
+    normalized_joined = " ".join(joined.split())
     issues = []
     if str(Path(meta["source"]).resolve()) in joined or "```" in joined:
         issues.append("handoff contains source root or fenced implementation material")
@@ -177,7 +178,7 @@ def _leaks(meta, index, contract, cases):
         raw = source_file(meta["source"], item["path"]).read_bytes()
         for line in source_text(raw).splitlines():
             normalized = " ".join(line.split())
-            if len(normalized) >= 36 and normalized in " ".join(joined.split()):
+            if len(normalized) >= 36 and normalized in normalized_joined:
                 issues.append("possible copied source line from analyst file: " + item["path"])
                 break
     return sorted(set(issues))

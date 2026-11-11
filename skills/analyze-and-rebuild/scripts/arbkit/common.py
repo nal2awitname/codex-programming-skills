@@ -1,5 +1,6 @@
 import hashlib
 import json
+import math
 import os
 import tempfile
 from pathlib import Path
@@ -21,17 +22,31 @@ def file_hash(path):
 def _pairs(items):
     result = {}
     for key, value in items:
+        # json.loads normally keeps only the last duplicate value, which could
+        # make an ambiguous response appear to match the expected result.
         if key in result:
             raise ValueError("duplicate JSON key: " + key)
         result[key] = value
     return result
 
 
-def read_json(path):
+def parse_json(text):
+    """Decode JSON without duplicate keys or non-finite floating-point values."""
     def bad_constant(value):
         raise ValueError("non-finite JSON value: " + value)
-    return json.loads(Path(path).read_text(encoding="utf-8-sig"),
-                      object_pairs_hook=_pairs, parse_constant=bad_constant)
+    def finite_float(value):
+        # parse_constant catches Infinity/NaN tokens, but not a valid JSON
+        # exponent such as 1e400 that overflows Python's floating-point range.
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("non-finite JSON number: " + value)
+        return number
+    return json.loads(text, object_pairs_hook=_pairs, parse_constant=bad_constant,
+                      parse_float=finite_float)
+
+
+def read_json(path):
+    return parse_json(Path(path).read_text(encoding="utf-8-sig"))
 
 
 def write_json(path, value):

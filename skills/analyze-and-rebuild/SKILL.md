@@ -3,15 +3,17 @@ name: analyze-and-rebuild
 description: วิเคราะห์โปรแกรม ระบุภาษา อธิบายโค้ดและการทำงาน แยกส่วนประกอบ แล้วออกแบบและเขียนใหม่จากความเข้าใจโดยห้ามคัดลอกโค้ดต้นฉบับ. Use for understanding source code, repositories, scripts, applications, executables, bundles, APKs, or firmware; explaining architecture and runtime behavior; and independently reimplementing or porting software from an evidence-based behavioral specification. Trigger on requests to reverse engineer, dissect a program, explain how it was built, or recreate functionality without copying original code.
 ---
 
-# Analyze and rebuild from understanding — version 2.0
+# Analyze and rebuild from understanding — version 2.1.0
 
 Understand the program, explain it clearly, and implement requested behavior independently. Respond in the user's language; default to concise Thai with concrete evidence. Read [references/analysis-guide.md](references/analysis-guide.md) for artifact-specific analysis, [references/behavior-spec.md](references/behavior-spec.md) before a rebuild, [references/verification.md](references/verification.md) before claiming equivalence or independence, and [references/github-handoff.md](references/github-handoff.md) when preparing components for continued development or GitHub delivery.
 
+Choose the workflow from the requested result. For a focused explanation, inspect only the relevant components and report evidence and gaps; do not require a rebuild contract, seal, or builder handoff. For an independent rebuild, use the full workbench below. Ordinary fixes to an existing project belong to `debug-and-fix`; new unrelated functionality belongs to `app-builder`. Read reference files when their stage is reached instead of loading every reference at the start.
+
 ## 0. Use the working evidence tools
 
-Read [references/toolkit-guide.md](references/toolkit-guide.md) for the runnable v2 workbench, JSON schemas, commands and limits. Resolve `SKILL_DIR` to this directory. Use Python 3.10+ and standard libraries, or the included PowerShell wrapper. Run `python SKILL_DIR/scripts/arb.py init --source ORIGINAL --work LAB` with separate original and work directories. Inventorying never executes the original. The scripts do not supply an AI model, understand semantics automatically, or generate a replacement by themselves; perform the actual analysis and independent implementation with the available agent/developer tools.
+Read [references/toolkit-guide.md](references/toolkit-guide.md) for the runnable workbench, JSON schemas, commands and limits. Resolve `SKILL_DIR` to this directory. Use Python 3.10+ and standard libraries, or the included PowerShell wrapper. Run `python SKILL_DIR/scripts/arb.py init --source ORIGINAL --work LAB` with separate original and work directories. Inventorying never executes the original. The scripts do not supply an AI model, understand semantics automatically, or generate a replacement by themselves; perform the actual analysis and independent implementation with the available agent/developer tools.
 
-Use the inventory and ledger throughout the task. Keep all original-facing material in `LAB/analyst/`. Explain the actual supported parser/runtime scope: Python AST, native PowerShell AST when available, incomplete JS/TS hints, and manual/tool-assisted discovery for other source languages or shipped binaries. Do not describe hints, an EXE signature, or a passed schema check as complete program understanding.
+When using the workbench, maintain its inventory and ledger throughout the task. Keep all original-facing material in `LAB/analyst/`. Explain the actual supported parser/runtime scope: Python AST, native PowerShell AST when available, incomplete JS/TS hints, and manual/tool-assisted discovery for other source languages or shipped binaries. Do not describe hints, an EXE signature, or a passed schema check as complete program understanding.
 
 ## Non-negotiable original-code boundary
 

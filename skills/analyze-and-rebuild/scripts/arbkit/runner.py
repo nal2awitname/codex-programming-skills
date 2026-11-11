@@ -1,13 +1,12 @@
 """Explicit, bounded text/JSON CLI probes. This is not a sandbox."""
 
-import json
 import os
 import signal
 import subprocess
 import threading
 from pathlib import Path
 
-from .common import below, digest, file_hash, read_json, write_json
+from .common import below, digest, file_hash, parse_json, read_json, write_json
 from .workflow import load_cases, load_contract, unchanged
 from .inventory import scan
 
@@ -78,12 +77,14 @@ def run(command, stdin, timeout=10, limit=1024 * 1024):
         proc.wait(timeout=6)
     # Do not leave probe descendants keeping capture streams open.
     for thread in threads: thread.join(timeout=0.1)
-    if any(thread.is_alive() for thread in threads):
+    capture_incomplete = any(thread.is_alive() for thread in threads)
+    if capture_incomplete:
         stop()
         for thread in threads: thread.join(timeout=1)
-    valid = not timed_out and not overflow.is_set() and not any(t.is_alive() for t in threads)
+    valid = not timed_out and not overflow.is_set() and not capture_incomplete
     result = {"exit_code": proc.returncode, "timed_out": timed_out,
-              "output_limited": overflow.is_set(), "valid": valid}
+              "output_limited": overflow.is_set(), "capture_incomplete": capture_incomplete,
+              "valid": valid}
     for name, raw in buffers.items():
         try: result[name] = raw.decode("utf-8")
         except UnicodeDecodeError:
@@ -98,12 +99,13 @@ def comparable(result, mode):
         raise ValueError("incomplete, limited, timed-out or non-UTF-8 capture")
     output = result["stdout"]
     if mode == "json":
-        def invalid(value): raise ValueError("non-finite JSON output")
-        output = json.loads(output, parse_constant=invalid)
+        output = parse_json(output)
     return {"exit_code": result["exit_code"], "stdout": output, "stderr": result["stderr"]}
 
 
 def execute(work, command_file, action, timeout=10, limit=1024 * 1024):
+    if action not in {"observe", "verify"}:
+        raise ValueError("execution action must be observe or verify")
     work, meta, index = unchanged(work)
     cases = load_cases(work)
     command = load_command(command_file)
@@ -124,8 +126,11 @@ def execute(work, command_file, action, timeout=10, limit=1024 * 1024):
     if action == "verify" and below(work, command["cwd"]):
         raise ValueError("rebuilt cwd must not contain the analyst workspace; use a separate rebuilt directory")
     observed = None
-    if action == "verify" and (work / "analyst/observations.json").exists():
-        observed = read_json(work / "analyst/observations.json")
+    observations_path = work / "analyst/observations.json"
+    observations_sha256 = None
+    if action == "verify" and observations_path.exists():
+        observations_sha256 = file_hash(observations_path)
+        observed = read_json(observations_path)
         if observed.get("cases_digest") != digest(cases) or observed.get("source_fingerprint") != index["fingerprint"]:
             raise ValueError("reference observations are stale; rerun observe")
         observed = {x["id"]: x for x in observed["results"]}
@@ -159,6 +164,7 @@ def execute(work, command_file, action, timeout=10, limit=1024 * 1024):
         record["rebuilt_fingerprint"] = scan(command["cwd"])["fingerprint"]
         record["command_file"] = str(Path(command_file).resolve())
         record["oracle"] = "observed_reference" if observed is not None else "specified_expectations_only"
+        record["observations_sha256"] = observations_sha256
         record["all_passed"] = all(x.get("passed") and x["valid"] for x in results)
     else:
         record["all_valid"] = all(x["valid"] for x in results)
@@ -172,7 +178,12 @@ def execute(work, command_file, action, timeout=10, limit=1024 * 1024):
 
 def verification_current(work, record):
     try:
-        return (record.get("cases_digest") == digest(load_cases(work))
+        work, _, index = unchanged(work)
+        observations_path = work / "analyst/observations.json"
+        observations_sha256 = file_hash(observations_path) if observations_path.exists() else None
+        return (record.get("source_fingerprint") == index["fingerprint"]
+                and record.get("observations_sha256") == observations_sha256
+                and record.get("cases_digest") == digest(load_cases(work))
                 and record.get("contract_digest") == digest(load_contract(work))
                 and record.get("command_file_sha256") == file_hash(record["command_file"])
                 and record.get("rebuilt_fingerprint") == scan(record["command"]["cwd"])["fingerprint"])

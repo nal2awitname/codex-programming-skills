@@ -3,9 +3,11 @@ name: rebuild-windows-from-behavior
 description: วิเคราะห์พฤติกรรม ภาษา แนวคิด และส่วนประกอบของโปรแกรม Windows แล้วสร้างใหม่จากข้อกำหนดโดยห้ามคัดลอกโค้ดต้นฉบับแม้แต่บรรทัดเดียว. Use for behavior-first independent reconstruction of Windows applications from observed UI/CLI/API/file behavior, EXE/DLL/SYS, native/.NET/Electron/script programs, installers, or supplied source metadata; includes evidence collection, language triage, independent implementation, verification and GitHub handoff. Trigger when asked to rebuild or port an existing Windows program without copying its code. Do not use for ordinary unrelated code edits.
 ---
 
-# Rebuild Windows from behavior — 2.0
+# Rebuild Windows from behavior — 2.1.0
 
 Understand the program, explain it clearly, and implement requested behavior independently. Respond in the user's language; default to concise Thai with concrete evidence. Read [references/analysis-guide.md](references/analysis-guide.md) for artifact-specific analysis, [references/behavior-spec.md](references/behavior-spec.md) before a rebuild, [references/verification.md](references/verification.md) before claiming equivalence or independence, and [references/github-handoff.md](references/github-handoff.md) when preparing components for continued development or GitHub delivery.
+
+For language identification or a focused explanation, perform bounded triage and report its uncertainty; do not create a contract/export or start a rebuild that was not requested. For reconstruction, follow the full workflow below. Read references at the stage where they are needed. Use `debug-and-fix` for ordinary repairs to existing code and `windows-simulator` when the task is to prepare a Windows test environment.
 
 ## REA investigation discipline
 
@@ -26,8 +28,8 @@ for runnable Python/PowerShell commands, JSON formats, review gates and limits.
 Resolve `SKILL_DIR` to the actual directory containing this file. Use Python 3.10+;
 the CLI has no third-party dependencies.
 
-1. Run `scripts/rebuild.py init WORKSPACE --name NAME` to separate analyst records
-   and `spec/contract.json`. Run `inspect TARGET --out ANALYST_REPORT` for static
+1. Run `python SKILL_DIR/scripts/rebuild.py init WORKSPACE --name NAME` to separate analyst records
+   and `spec/contract.json`. Invoke the same Python entrypoint with `inspect TARGET --out ANALYST_REPORT` for static
    triage; it never executes the target or emits source excerpts. Keep all
    inventory, original-facing observations and reports in the analyst area.
 2. Inventory accessible menus, controls, CLI/API commands, file formats, state,

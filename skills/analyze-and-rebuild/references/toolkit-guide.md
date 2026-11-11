@@ -1,4 +1,4 @@
-# ARB workbench 2.0
+# ARB workbench 2.1.0
 
 ## Contents
 
@@ -10,6 +10,8 @@
 - [Limits and testing](#limits-and-testing)
 
 Use Python 3.10+ with standard libraries only. Resolve `SKILL_DIR` to the installed skill folder. The scripts provide inventory, records, gates and CLI testing; Codex or a developer performs the actual reasoning and writes the new implementation. Do not treat an automatically generated inventory as understanding.
+
+This workbench uses schema 2 and separate `contract.json` and `cases.json` files. The Windows-specific `rebuild.py` toolkit uses a different schema and command set; its JSON files are not interchangeable with these inputs. Use `--help` on the installed entrypoint or subcommand to check its supported options.
 
 ## Commands
 

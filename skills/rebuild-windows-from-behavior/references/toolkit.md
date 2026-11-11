@@ -1,10 +1,15 @@
-# Runnable toolkit
+# Runnable toolkit 2.1.0
 
 Use Python 3.10 or later; the bundled CLI has no third-party dependencies.
 Resolve `SKILL_DIR` to the actual folder containing SKILL.md. All output paths must
 be new. The scripts refuse replacing files, running a reference program, following
 symlinks/reparse paths, or recursively exporting analysis. Use trusted, single-user
 workspaces; these checks are not a security boundary against concurrent changes.
+
+This toolkit uses contract schema 1 with cases embedded in the contract. The
+general `analyze-and-rebuild` workbench uses schema 2 and separate cases; do not
+pass its files to these commands. Check `--help` on the installed entrypoint or
+subcommand before using options from another toolkit or release.
 
 ## Commands
 
@@ -30,7 +35,7 @@ budget. Adjust with `--max-files`, `--sample-kib`, `--hash-limit-mib`,
 `--total-read-mib`. Skips and truncation remain visible in the report.
 It does not unpack installers, decompile, prove language identity or discover functions.
 
-Version 2.0.1 adds Pascal source indicators (`.pas`, `.pp`, `.lpr`, `.dpr`) and
+The inspector includes Pascal source indicators (`.pas`, `.pp`, `.lpr`, `.dpr`) and
 bounded Lazarus `.lpi` XML metadata inspection. Recognized compiler modes yield
 language hints, not proof of source language for every component. Invalid,
 truncated or unrelated XML does not become a confirmed language classification.

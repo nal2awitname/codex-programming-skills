@@ -261,6 +261,40 @@ class ToolkitAcceptance(unittest.TestCase):
             tool.add_observation(ws, observation())
         self.assertEqual(before, (ws / "analyst/observations.jsonl").read_bytes())
 
+    def test_observation_append_after_unterminated_record_preserves_valid_jsonl(self):
+        ws = self.workspace()
+        path = ws / "analyst/observations.jsonl"
+        original = json.dumps(observation(), ensure_ascii=False).encode("utf-8")
+        path.write_bytes(original)
+        second = observation()
+        second["id"] = "OBS-002"
+        tool.add_observation(ws, second)
+        self.assertTrue(path.read_bytes().startswith(original + b"\n"))
+        self.assertEqual([item["id"] for item in tool.read_observations(path)],
+                         ["OBS-001", "OBS-002"])
+        before = path.read_bytes()
+        with self.assertRaises(tool.Invalid):
+            tool.add_observation(ws, observation())
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_observation_unicode_line_separators_round_trip_and_export(self):
+        ws = self.workspace()
+        record = observation()
+        record["scenario"] = "Thai ไทย\u0085next\u2028line\u2029paragraph"
+        tool.add_observation(ws, record)
+        self.assertEqual(tool.read_observations(ws / "analyst/observations.jsonl"), [record])
+        self.write_contract(ws, contract(observed=True))
+        tool.export_handoff(ws, self.root / "handoff")
+
+    def test_invalid_observation_reports_actual_ledger_line_and_preserves_bytes(self):
+        ws = self.workspace()
+        path = ws / "analyst/observations.jsonl"
+        original = json.dumps(observation()) + "\n{invalid json}\n"
+        path.write_text(original, encoding="utf-8")
+        with self.assertRaisesRegex(tool.Invalid, "Invalid observation at line 2"):
+            tool.add_observation(ws, observation())
+        self.assertEqual(path.read_text(encoding="utf-8"), original)
+
     def test_unreviewed_export_fails_without_output(self):
         ws = self.workspace()
         data = contract()
@@ -351,7 +385,8 @@ class ToolkitAcceptance(unittest.TestCase):
         with self.assertRaises(tool.Invalid):
             tool.write_new_json(parent / "output.json", {})
 
-    @unittest.skipUnless(os.name == "nt", "Requires Windows PowerShell")
+    @unittest.skipUnless(os.name == "nt" or shutil.which("powershell") or shutil.which("pwsh"),
+                         "Requires PowerShell")
     def test_powershell_wrapper_forwards_arguments_and_exit_code(self):
         shell = shutil.which("powershell") or shutil.which("pwsh")
         self.assertIsNotNone(shell)
@@ -360,6 +395,17 @@ class ToolkitAcceptance(unittest.TestCase):
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(tool.VERSION, result.stdout)
+        workspace = self.root / "workspace with spaces"
+        command = [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                   str(SKILL / "scripts/Invoke-Rebuild.ps1"), "init", str(workspace),
+                   "--name", "Independent project"]
+        created = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(created.returncode, 0, created.stderr)
+        self.assertEqual(tool.load_json(workspace / "spec/contract.json")["project"]["name"],
+                         "Independent project")
+        refused = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(refused.returncode, 2, refused.stderr)
+        self.assertIn("Output already exists", refused.stderr)
 
 
 if __name__ == "__main__":

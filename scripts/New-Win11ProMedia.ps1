@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
@@ -48,54 +48,89 @@ $limitBytes = 4GB - 1MB
 
 function Copy-Tree([string]$From, [string]$To) {
     New-Item -ItemType Directory -Path $To -Force | Out-Null
-    robocopy $From $To /E /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Null
+    robocopy $From $To /E /XJ /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "robocopy ล้มเหลว (exit $LASTEXITCODE) จาก $From ไป $To" }
 }
 
+function Assert-NoReparsePath([string]$Path) {
+    $current = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+    while ($current) {
+        if (Test-Path -LiteralPath $current) {
+            $item = Get-Item -LiteralPath $current -Force
+            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                throw "ไม่รองรับเส้นทางลิงก์หรือ reparse point: $current"
+            }
+        }
+        $parent = Split-Path -Parent $current
+        if ($parent -eq $current) { break }
+        $current = $parent
+    }
+}
+
+$WorkDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($WorkDir)
+Assert-NoReparsePath $WorkDir
+if (Test-Path -LiteralPath $WorkDir -PathType Leaf) { throw 'WorkDir ต้องเป็นโฟลเดอร์ ไม่ใช่ไฟล์' }
 if (Test-Path -LiteralPath $WorkDir) {
     if (Get-ChildItem -LiteralPath $WorkDir -Force | Select-Object -First 1) {
         throw "WorkDir '$WorkDir' ไม่ว่าง ใช้โฟลเดอร์ใหม่เพื่อไม่ให้ทับไฟล์เดิม"
     }
 }
 
+# Approve the whole local operation before mounting an ISO or creating files.
+# A declined confirmation must not fall through into export/delete steps.
+if (-not $PSCmdlet.ShouldProcess($WorkDir, "สร้างชุดติดตั้งรุ่น '$Edition' จาก $Source")) { return }
+
 # 1) คัดลอกไฟล์ติดตั้งจาก ISO หรือโฟลเดอร์
 $mounted = $null
+$mountedByScript = $false
 try {
     if ($Source -match '\.iso$') {
-        if (-not (Test-Path -LiteralPath $Source)) { throw "ไม่พบไฟล์ $Source" }
-        $mounted = Mount-DiskImage -ImagePath (Resolve-Path -LiteralPath $Source).Path -PassThru
+        if (-not (Test-Path -LiteralPath $Source -PathType Leaf)) { throw "ไม่พบไฟล์ $Source" }
+        $isoPath = (Resolve-Path -LiteralPath $Source).Path
+        $mounted = Get-DiskImage -ImagePath $isoPath
+        if (-not $mounted.Attached) {
+            $mounted = Mount-DiskImage -ImagePath $isoPath -PassThru
+            $mountedByScript = $true
+        }
         $letter = ($mounted | Get-Volume).DriveLetter
         if (-not $letter) { throw 'เมานต์ ISO แล้วไม่พบอักษรไดรฟ์' }
         $srcRoot = "${letter}:\"
     } else {
         if (-not (Test-Path -LiteralPath $Source -PathType Container)) { throw "ไม่พบโฟลเดอร์ $Source" }
+        Assert-NoReparsePath $Source
         $srcRoot = (Resolve-Path -LiteralPath $Source).Path
     }
-    if (-not (Test-Path (Join-Path $srcRoot 'setup.exe'))) { throw "ไม่พบ setup.exe ใน $srcRoot" }
+    $sourcePrefix = $srcRoot.TrimEnd([char[]]'\/') + [IO.Path]::DirectorySeparatorChar
+    if ($WorkDir.Equals($srcRoot.TrimEnd([char[]]'\/'), [StringComparison]::OrdinalIgnoreCase) -or
+        $WorkDir.StartsWith($sourcePrefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'WorkDir ต้องอยู่นอกโฟลเดอร์ต้นทาง เพื่อป้องกันการคัดลอกวนซ้ำ'
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $srcRoot 'setup.exe') -PathType Leaf)) { throw "ไม่พบ setup.exe ใน $srcRoot" }
     Write-Host "คัดลอกไฟล์ติดตั้งจาก $srcRoot ..."
-    if ($PSCmdlet.ShouldProcess($WorkDir, 'คัดลอกไฟล์ติดตั้ง')) { Copy-Tree $srcRoot $WorkDir }
+    Copy-Tree $srcRoot $WorkDir
 } finally {
-    if ($mounted) { Dismount-DiskImage -ImagePath $mounted.ImagePath | Out-Null }
+    if ($mountedByScript) { Dismount-DiskImage -ImagePath $mounted.ImagePath | Out-Null }
 }
-if ($WhatIfPreference) { return }
 
 # 2) หา index ของรุ่นที่ต้องการ (ชื่อตรงตัว ไม่เอา Pro N / Pro Education ฯลฯ)
 $sources = Join-Path $WorkDir 'sources'
-$srcImage = @('install.wim', 'install.esd') |
-    ForEach-Object { Join-Path $sources $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $srcImage) { throw 'ไม่พบ sources\install.wim หรือ install.esd' }
+$sourceImages = @(@('install.wim', 'install.esd') |
+    ForEach-Object { Join-Path $sources $_ } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+if ($sourceImages.Count -ne 1) { throw 'ต้องมี sources\install.wim หรือ install.esd เพียงไฟล์เดียว' }
+$srcImage = $sourceImages[0]
 
 $images = Get-WindowsImage -ImagePath $srcImage
-$target = $images | Where-Object { $_.ImageName -eq $Edition }
-if (-not $target) {
+$target = @($images | Where-Object { $_.ImageName -eq $Edition })
+if ($target.Count -ne 1) {
     $list = ($images | ForEach-Object { "  [$($_.ImageIndex)] $($_.ImageName)" }) -join "`n"
-    throw "ไม่พบรุ่น '$Edition' ใน $srcImage`nรุ่นที่มี:`n$list"
+    throw "ต้องพบรุ่น '$Edition' เพียงหนึ่ง index ใน $srcImage`nรุ่นที่มี:`n$list"
 }
 $index = @($target)[0].ImageIndex
 Write-Host "พบ '$Edition' ที่ index $index"
 
 # 3) ส่งออกเฉพาะรุ่นนั้นเป็น WIM ใหม่ แล้วแทนที่ไฟล์เดิม
 $newWim = Join-Path $sources 'install_single.wim'
+if (Test-Path -LiteralPath $newWim) { throw 'มี install_single.wim อยู่แล้ว หยุดเพื่อไม่ส่งออกต่อท้ายอิมเมจเดิม' }
 Write-Host 'กำลังส่งออกอิมเมจ (ใช้เวลาหลายนาที) ...'
 Export-WindowsImage -SourceImagePath $srcImage -SourceIndex $index `
     -DestinationImagePath $newWim -CompressionType Maximum -CheckIntegrity | Out-Null
@@ -103,6 +138,20 @@ Export-WindowsImage -SourceImagePath $srcImage -SourceIndex $index `
 $check = @(Get-WindowsImage -ImagePath $newWim)
 if ($check.Count -ne 1 -or $check[0].ImageName -ne $Edition) {
     throw "ตรวจอิมเมจใหม่ไม่ผ่าน: พบ $($check.Count) รุ่น"
+}
+$imageArchitecture = $null
+if (-not $SkipAutounattend) {
+    $detail = Get-WindowsImage -ImagePath $newWim -Index 1
+    $imageArchitecture = switch ([string]$detail.Architecture) {
+        '0' { 'x86' }
+        '9' { 'amd64' }
+        '12' { 'arm64' }
+        'x86' { 'x86' }
+        'x64' { 'amd64' }
+        'amd64' { 'amd64' }
+        'arm64' { 'arm64' }
+        default { throw "ไม่รองรับสถาปัตยกรรมอิมเมจ '$($detail.Architecture)' สำหรับ autounattend.xml" }
+    }
 }
 Remove-Item -LiteralPath $srcImage -Force
 $finalWim = Join-Path $sources 'install.wim'
@@ -122,35 +171,43 @@ if ($size -gt $limitBytes) {
     }
 }
 
-# 5) autounattend.xml: เลือกรุ่น Pro ด้วยคีย์ทั่วไป (ใช้เลือกรุ่นเท่านั้น ไม่ใช่คีย์ activate)
+# 5) The exported edition is always index 1. Do not force a Pro key on another edition.
 if (-not $SkipAutounattend) {
-    $xml = @'
+    $xml = @"
 <?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
   <settings pass="windowsPE">
-    <component name="Microsoft-Windows-Setup" processorArchitecture="amd64"
+    <component name="Microsoft-Windows-Setup" processorArchitecture="$imageArchitecture"
                publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS"
                xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+      <ImageInstall>
+        <OSImage>
+          <InstallFrom>
+            <MetaData wcm:action="add">
+              <Key>/IMAGE/INDEX</Key>
+              <Value>1</Value>
+            </MetaData>
+          </InstallFrom>
+        </OSImage>
+      </ImageInstall>
       <UserData>
-        <ProductKey>
-          <Key>VK7JG-NPHTM-C97JM-9MPGT-3V66T</Key>
-        </ProductKey>
         <AcceptEula>true</AcceptEula>
       </UserData>
     </component>
   </settings>
 </unattend>
-'@
-    Set-Content -LiteralPath (Join-Path $WorkDir 'autounattend.xml') -Value $xml -Encoding UTF8
+"@
+    Set-Content -LiteralPath (Join-Path $WorkDir 'autounattend.xml') -Value $xml -Encoding UTF8 -Force
     Write-Host 'เขียน autounattend.xml แล้ว (ไม่มีการแบ่งดิสก์ คุณเลือกไดรฟ์ติดตั้งเอง)'
 }
 
 # 6) คัดลอกลง USB (ไม่ฟอร์แมต)
 if ($UsbDrive) {
+    if ($UsbDrive -notmatch '^[A-Za-z]:?\\?$') { throw 'UsbDrive ต้องเป็นอักษรไดรฟ์ เช่น E:' }
     $dl = $UsbDrive.TrimEnd(':', '\').ToUpper()
     $vol = Get-Volume -DriveLetter $dl -ErrorAction Stop
     if ($vol.DriveType -ne 'Removable') { throw "ไดรฟ์ ${dl}: ไม่ใช่ไดรฟ์ถอดได้ ($($vol.DriveType)) หยุดเพื่อความปลอดภัย" }
-    if (Get-ChildItem -LiteralPath "${dl}:\" -Force -ErrorAction SilentlyContinue | Select-Object -First 1) {
+    if (Get-ChildItem -LiteralPath "${dl}:\" -Force -ErrorAction Stop | Select-Object -First 1) {
         throw "ไดรฟ์ ${dl}: ไม่ว่างเปล่า ย้ายหรือสำรองไฟล์ก่อน สคริปต์นี้ไม่ลบข้อมูลใน USB"
     }
     if ($vol.FileSystem -eq 'FAT32' -and (Test-Path $finalWim) -and (Get-Item $finalWim).Length -gt $limitBytes) {

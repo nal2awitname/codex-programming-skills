@@ -1,6 +1,7 @@
 """Exercise the real command entry point and process exit statuses."""
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -12,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CliTests(unittest.TestCase):
-    def run_cli(self, *arguments):
+    def run_cli(self, *arguments, env=None):
         completed = subprocess.run(
             [sys.executable, "scan_lab.py", *map(str, arguments)],
             cwd=ROOT,
@@ -21,6 +22,7 @@ class CliTests(unittest.TestCase):
             capture_output=True,
             timeout=15,
             check=False,
+            env=env,
         )
         self.assertEqual(completed.stderr, "")
         return completed.returncode, json.loads(completed.stdout)
@@ -59,6 +61,17 @@ class CliTests(unittest.TestCase):
             code, actual = self.run_cli("--scenario", path)
         self.assertNotEqual(code, 0)
         self.assertEqual(actual, {"error": "invalid_scenario"})
+
+    @unittest.skipUnless(hasattr(sys, "get_int_max_str_digits"), "Python has no integer digit guard")
+    def test_json_integer_digit_limit_returns_named_error_and_nonzero(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / "tests") as directory:
+            path = Path(directory) / "oversized-integer.json"
+            path.write_text('{"initial": [' + '9' * 700 + '], "steps": []}', encoding="utf-8")
+            code, actual = self.run_cli(
+                "--scenario", path, env={**os.environ, "PYTHONINTMAXSTRDIGITS": "640"},
+            )
+        self.assertNotEqual(code, 0)
+        self.assertEqual(actual, {"error": "invalid_json"})
 
     def test_missing_file_returns_io_error_and_nonzero(self):
         with tempfile.TemporaryDirectory(dir=ROOT / "tests") as directory:

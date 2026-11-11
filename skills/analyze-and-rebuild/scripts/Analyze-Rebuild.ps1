@@ -1,14 +1,24 @@
 [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Low')]
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet('init', 'status', 'report', 'check', 'seal', 'handoff', 'observe', 'verify')]
+    [ValidateSet('init', 'evidence', 'attach', 'status', 'report', 'check', 'seal', 'handoff', 'observe', 'verify')]
     [string]$Action,
     [Parameter(Mandatory = $true)][string]$Work,
     [string]$Source,
     [string]$CommandFile,
     [string]$Destination,
     [switch]$Reviewed,
-    [double]$TimeoutSeconds = 10
+    [ValidateRange(0.05, 120.0)][double]$TimeoutSeconds = 10,
+    [ValidateRange(1, 16777216)][int]$OutputLimit = 1048576,
+    [ValidateRange(1, 2147483647)][int]$MaxFiles = 5000,
+    [ValidateRange(1, 2147483647)][int]$MaxBytes = 2097152,
+    [string]$EvidenceId,
+    [string]$EvidenceFile,
+    [int]$StartLine,
+    [int]$EndLine,
+    [string]$Summary,
+    [string]$Artifact,
+    [string]$Method
 )
 $ErrorActionPreference = 'Stop'
 $pythonCommand = $null
@@ -32,11 +42,30 @@ if (-not $pythonCommand) { throw 'Python 3.10 or newer is required.' }
 $arguments = @((Join-Path $PSScriptRoot 'arb.py'), $Action, '--work', $Work)
 if ($Action -eq 'init') {
     if (-not $Source) { throw '-Source is required for init.' }
-    $arguments += @('--source', $Source)
+    $arguments += @('--source', $Source, '--max-files', $MaxFiles.ToString(), '--max-bytes', $MaxBytes.ToString())
+}
+if ($Action -in @('evidence', 'attach')) {
+    if ([string]::IsNullOrWhiteSpace($EvidenceId) -or [string]::IsNullOrWhiteSpace($Summary)) {
+        throw '-EvidenceId and -Summary are required for evidence or attach.'
+    }
+    $arguments += @('--id', $EvidenceId, '--summary', $Summary)
+}
+if ($Action -eq 'evidence') {
+    if ([string]::IsNullOrWhiteSpace($EvidenceFile) -or $StartLine -lt 1 -or $EndLine -lt $StartLine) {
+        throw '-EvidenceFile and a valid -StartLine/-EndLine range are required for evidence.'
+    }
+    $arguments += @('--file', $EvidenceFile, '--start', $StartLine.ToString(), '--end', $EndLine.ToString())
+}
+if ($Action -eq 'attach') {
+    if ([string]::IsNullOrWhiteSpace($Artifact) -or [string]::IsNullOrWhiteSpace($Method)) {
+        throw '-Artifact and -Method are required for attach.'
+    }
+    $arguments += @('--artifact', $Artifact, '--method', $Method)
 }
 if ($Action -in @('observe', 'verify')) {
     if (-not $CommandFile) { throw '-CommandFile is required.' }
-    $arguments += @('--command', $CommandFile, '--timeout', $TimeoutSeconds.ToString([Globalization.CultureInfo]::InvariantCulture))
+    $arguments += @('--command', $CommandFile, '--timeout', $TimeoutSeconds.ToString([Globalization.CultureInfo]::InvariantCulture),
+                    '--output-limit', $OutputLimit.ToString())
 }
 if ($Action -eq 'handoff') {
     if (-not $Destination) { throw '-Destination is required.' }

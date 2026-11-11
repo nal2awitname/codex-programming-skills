@@ -1,5 +1,6 @@
 import hashlib
 import json
+import math
 import os
 import tempfile
 from pathlib import Path
@@ -27,11 +28,21 @@ def _pairs(items):
     return result
 
 
-def read_json(path):
+def parse_json(text):
+    """Decode unambiguous JSON that can be hashed without loss or infinities."""
     def bad_constant(value):
         raise ValueError("non-finite JSON value: " + value)
-    return json.loads(Path(path).read_text(encoding="utf-8-sig"),
-                      object_pairs_hook=_pairs, parse_constant=bad_constant)
+    def finite_float(value):
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("non-finite JSON number: " + value)
+        return number
+    return json.loads(text, object_pairs_hook=_pairs, parse_constant=bad_constant,
+                      parse_float=finite_float)
+
+
+def read_json(path):
+    return parse_json(Path(path).read_text(encoding="utf-8-sig"))
 
 
 def write_json(path, value):

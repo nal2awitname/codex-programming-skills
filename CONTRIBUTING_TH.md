@@ -23,6 +23,7 @@ python -B scripts/check_repo.py --test
 | ARB workbench | `skills/analyze-and-rebuild/scripts/` | `python -B -m unittest discover -s skills/analyze-and-rebuild/tests -v` |
 | Windows behavior toolkit | `skills/rebuild-windows-from-behavior/scripts/` | `python -B -m unittest discover -s tests/rebuild-windows-from-behavior -v` |
 | Windows media script | `scripts/New-Win11ProMedia.ps1` | `python -B -m unittest discover -s tests/windows-media -v` |
+| PowerShell code runner และตัวตรวจ | `skills/powershell-code-runner/scripts/` | `python -B -m unittest discover -s tests/powershell-code-runner -v` (ต้องมี `pwsh` หรือ `powershell`) |
 | Repository/release tooling | `scripts/check_repo.py`, `scripts/build_release.py`, `scripts/install_skills.py`, `scripts/verify_release.py` | `python -B -m unittest discover -s tests -v` |
 | ตัวอย่างโปรแกรม | `examples/<name>/` | รัน unittest จากโฟลเดอร์ตัวอย่างนั้น หรือใช้คำสั่งตรวจรวม |
 
@@ -51,4 +52,4 @@ CI ใน `.github/workflows/skills.yml` ตรวจ Ubuntu/Windows/macOS ด�
 เมื่อออกเวอร์ชันถัดไป อัปเดต `VERSION`, เลขเวอร์ชันของ toolkit ทั้งสอง, `CHANGELOG.md` และคู่มือที่เกี่ยวข้องให้ตรงกัน รักษา contract schema เดิมหากยังไม่มีเหตุผลและแผนย้ายข้อมูลสำหรับเปลี่ยน schema
 
 
-โค้ด คอมเมนต์ configuration metadata และ fenced code blocks ต้องไม่มีภาษาไทย ใส่คำอธิบายภาษาไทยเป็น prose ในเอกสารภายนอกแทน ตัวตรวจ `check_repo.py` บังคับนโยบายนี้ด้วย ZIP รุ่น 2.2.0 แยกทั้ง source และรายสกิล พร้อม manifest/hash; `--smoke` ทดสอบการติดตั้งและเรียก runtime จากแพ็กเกจที่แตกแล้วโดยตรง
+โค้ด คอมเมนต์ configuration metadata และ fenced code blocks ต้องไม่มีภาษาไทย ใส่คำอธิบายภาษาไทยเป็น prose ในเอกสารภายนอกแทน ตัวตรวจ `check_repo.py` บังคับนโยบายนี้ด้วย ZIP รุ่น 2.3.0 แยกทั้ง source และรายสกิล พร้อม manifest/hash; `--smoke` ทดสอบการติดตั้งและเรียก runtime จากแพ็กเกจที่แตกแล้วโดยตรง

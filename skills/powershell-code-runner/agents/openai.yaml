@@ -1,0 +1,4 @@
+interface:
+  display_name: "PowerShell Code Runner"
+  short_description: "Reliable PowerShell scripts; run code in 50+ languages"
+  default_prompt: "Use $powershell-code-runner to write and verify a PowerShell script that runs on any Windows computer, or to build and run this source file with Invoke-Code.ps1."

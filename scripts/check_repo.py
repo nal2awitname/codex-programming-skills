@@ -44,6 +44,7 @@ SUITES = (
     ("tests/windows-media", "test_*.py"),
     ("examples/rebuild-windows-from-behavior/tests", "test_*.py"),
     ("examples/value-scan-lab/tests", "test_*.py"),
+    ("tests/powershell-code-runner", "test_*.py"),
 )
 
 
@@ -118,7 +119,7 @@ def validate(root: Path = ROOT) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--test", action="store_true", help="also run all six test suites")
+    parser.add_argument("--test", action="store_true", help="also run every test suite")
     args = parser.parse_args()
     errors = validate()
     if errors:

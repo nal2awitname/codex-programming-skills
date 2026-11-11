@@ -1,4 +1,4 @@
-# ARB workbench 2.2.0
+# ARB workbench 2.3.0
 
 ## Contents
 

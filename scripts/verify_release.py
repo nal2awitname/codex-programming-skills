@@ -160,6 +160,8 @@ def smoke_test(release_dir: Path, source: dict, skills: list[dict], version: str
         # Run the actual source-package tests, including real CLI lifecycle tests.
         # This also catches runtime files omitted from an otherwise valid archive.
         environment["REBUILD_SKILL_DIR"] = str(base / "individual skills/rebuild-windows-from-behavior")
+        # Runner tests execute the standalone installed copy, not the source tree.
+        environment["CODE_RUNNER_SKILL_DIR"] = str(base / "individual skills/powershell-code-runner")
         subprocess.run([sys.executable, "-B", str(package / "scripts/check_repo.py"), "--test"],
                        cwd=package, env=environment, check=True)
 

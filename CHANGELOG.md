@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.3.0 — 2026-11-11
+
+### New skill: powershell-code-runner
+
+- Add `Invoke-Code.ps1`, one runner for 53 languages and project types (Python, C, C++, C#, Java, JavaScript, TypeScript, Go, Rust, PHP, Ruby, Kotlin, Swift, Batch, VBScript, Bash and more; Cargo, Go module, .NET and npm folders). It detects the language from the extension or shebang, probes each toolchain before use (skipping broken stubs such as the Microsoft Store python alias), builds in a temporary folder that is always removed, and returns the program's exit code.
+- Pass arguments identically in Windows PowerShell 5.1 and PowerShell 7 with an exact MSVC quoting implementation, run batch files through cmd.exe with cmd-safe quoting, keep runner messages and build output on stderr, and add `-Plan`, `-List`, `-InputFile`, `-TimeoutSeconds` (kills the process tree), `-Toolchain`, `-BuildArg`, `-KeepBuild` and `-Pause`.
+- Make non-ASCII output and paths work on Thai and other non-English Windows installations: UTF-8 console during runs, UTF-8 settings for Python, Java, javac, MSVC, csc and vbc, static MinGW linking, and an ASCII build root when the temporary folder is non-ASCII.
+- Add `Test-PowerShellScript.ps1`, a static checker for syntax, PowerShell 7-only syntax and parameters, BOM-less non-ASCII sources, platform-dependent aliases, `Invoke-Expression`, hard-coded profile paths, machine-wide execution policy changes and unchecked native exit codes.
+- Add a script template, cmd.exe launchers for terminals and drag-and-drop, reliability rules and a troubleshooting table.
+- Add tests that run every language fixture whose toolchain is installed, plus quoting, option parsing, exit codes, stdin, timeouts, CRLF scripts, project folders, launchers and checker rules under every available PowerShell. Release smoke tests run them against the standalone installed skill.
+
+### Documentation
+
+- Add a Thai guide for the runner and the `skill for creating code` catalog that groups all seven skills by task.
+
+Contract schemas, Python minimum (3.10) and existing toolkit command formats are unchanged.
+
 ## 2.2.0 — 2026-11-11
 
 ### Installable and verified releases

@@ -1,4 +1,4 @@
-# Runnable toolkit 2.2.0
+# Runnable toolkit 2.3.0
 
 Use Python 3.10 or later; the bundled CLI has no third-party dependencies.
 Resolve `SKILL_DIR` to the actual folder containing SKILL.md. All output paths must

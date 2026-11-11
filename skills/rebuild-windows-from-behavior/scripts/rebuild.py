@@ -18,7 +18,7 @@ import sys
 import tempfile
 import xml.etree.ElementTree as ET
 
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 SKIP_DIRS = {".git", ".svn", "node_modules", "__pycache__", ".venv", "venv"}
 EVIDENCE = {"observed", "source-confirmed", "public-spec-confirmed", "proposed"}
 MACHINES = {0x14C: "x86", 0x8664: "x64", 0xAA64: "ARM64", 0x1C4: "ARM32"}

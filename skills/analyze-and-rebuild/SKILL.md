@@ -3,7 +3,7 @@ name: analyze-and-rebuild
 description: "Explain program languages, architecture, components, and runtime behavior from source or artifacts; independently reconstruct or port requested behavior without copying original implementation. Use for evidence-based analysis and no-copy rebuilds. Prefer rebuild-windows-from-behavior for Windows-specific reconstruction."
 ---
 
-# Analyze and independently rebuild — 2.2.0
+# Analyze and independently rebuild — 2.3.0
 
 Explain the selected program from evidence and build only the requested scope. Respond in the user's language; write generated code, comments, identifiers, commands, and machine-facing configuration in English. This skill provides an evidence workflow, not an AI model, decompiler, runtime sandbox, or automatic application generator.
 

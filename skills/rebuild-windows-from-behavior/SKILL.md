@@ -3,7 +3,7 @@ name: rebuild-windows-from-behavior
 description: "Independently reconstruct or port Windows application behavior without copying original code. Use for EXE/DLL/SYS, .NET, Electron, scripts, installers, and observed UI/CLI/API/file behavior, with language triage, audited contracts, verification, and maintainable delivery. Exclude ordinary unrelated code edits."
 ---
 
-# Rebuild Windows from behavior — 2.2.0
+# Rebuild Windows from behavior — 2.3.0
 
 Understand the selected Windows application and independently implement the evidenced, agreed scope. Respond in the user's language; write generated code, comments, identifiers, commands, and configuration in English. The toolkit supplies static triage and contract records; it does not launch a VM, record a GUI, grant PC access, or generate an application by itself.
 

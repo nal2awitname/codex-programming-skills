@@ -10,6 +10,9 @@
 | [windows-simulator](skills/windows-simulator/SKILL.md) | เลือกและตั้งระบบจำลอง/ทดสอบ Windows (CI, VM, Docker, Wine) | `ใช้ $windows-simulator ตั้งระบบทดสอบสคริปต์ PowerShell บน Windows` |
 | [analyze-and-rebuild](skills/analyze-and-rebuild/SKILL.md) | วิเคราะห์ source/artifact และจัดทำข้อกำหนดสำหรับเขียนใหม่อย่างอิสระ | `ใช้ $analyze-and-rebuild วิเคราะห์ CLI นี้ แล้วสร้างใหม่จากข้อกำหนด` |
 | [rebuild-windows-from-behavior](skills/rebuild-windows-from-behavior/SKILL.md) | วิเคราะห์พฤติกรรมโปรแกรม Windows พร้อม toolkit ตรวจ contract | `ใช้ $rebuild-windows-from-behavior ตรวจ EXE นี้และสรุปพฤติกรรมที่พิสูจน์ได้` |
+| [powershell-code-runner](skills/powershell-code-runner/SKILL.md) | เขียน ตรวจ อธิบายสคริปต์ PowerShell ให้รันได้ทั้ง 5.1 และ 7 และรันโค้ดแทบทุกภาษาจาก terminal | `ใช้ $powershell-code-runner รันไฟล์ main.cpp พร้อม input.txt แล้วสรุปผล` |
+
+ดูสารบัญแยกหมวดใน [skill for creating code](skill%20for%20creating%20code/README.md) และคู่มือตัวรันใน [docs/powershell-code-runner](docs/powershell-code-runner/README_TH.md)
 
 สกิลเหล่านี้เป็นขั้นตอนให้ AI ทำงานร่วมกับเครื่องมือและ runtime ที่มีในแต่ละแชต ความสามารถในการรัน ทดสอบ หรือเข้าถึง GitHub ขึ้นกับ environment และสิทธิ์ที่เชื่อมต่อไว้ ผลทดสอบต้องมาจากการรันจริง
 
@@ -74,10 +77,10 @@ Fix the cause while preserving the existing API and run relevant regression test
 
 ติดตั้งสกิลเพิ่มผ่าน `$skill-installer` โดยระบุ path ที่ตรงกับชื่อในตาราง หรือคัดลอกทั้งโฟลเดอร์ไป `.agents/skills/` ห้ามคัดลอกเฉพาะ `SKILL.md` เพราะบางสกิลต้องใช้ `scripts/` และ `references/` ด้วย
 
-รุ่นปัจจุบัน **2.2.0**: ดู [รายการแก้ไข](CHANGELOG.md) และ [วิธีตรวจทั้งรีโป/สร้าง ZIP](README.md#ทดสอบและสร้างแพ็กเกจจริง)
+รุ่นปัจจุบัน **2.3.0**: ดู [รายการแก้ไข](CHANGELOG.md) และ [วิธีตรวจทั้งรีโป/สร้าง ZIP](README.md#ทดสอบและสร้างแพ็กเกจจริง)
 
 
-## ตัวติดตั้งและแพ็กเกจรุ่น 2.2.0
+## ตัวติดตั้งและแพ็กเกจรุ่น 2.3.0
 
 คำสั่งสกิลและ metadata เป็นภาษาอังกฤษเพื่อลดความกำกวมในการเรียกใช้ AI ตอบภาษาของผู้ใช้ได้ แต่โค้ดและ configuration ที่สร้างต้องเป็นภาษาอังกฤษ ตัวตรวจแยกเอกสารภาษาไทยออกจากไฟล์โค้ดและ code blocks
 

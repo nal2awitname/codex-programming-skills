@@ -1,6 +1,6 @@
-# Codex programming skills — 2.2.0
+# Codex programming skills — 2.3.0
 
-ชุด Agent Skills สำหรับตรวจโค้ด สร้างโปรแกรม แก้บั๊ก เตรียมระบบทดสอบ Windows และวิเคราะห์เพื่อสร้างโปรแกรมใหม่อย่างอิสระ คำสั่งสกิล metadata โค้ด คอมเมนต์ และ code blocks ใช้ภาษาอังกฤษ ส่วนคำอธิบายภาษาไทยแยกไว้ในเอกสาร
+ชุด Agent Skills สำหรับตรวจโค้ด สร้างโปรแกรม แก้บั๊ก เขียนสคริปต์ PowerShell และรันโค้ดหลายภาษา เตรียมระบบทดสอบ Windows และวิเคราะห์เพื่อสร้างโปรแกรมใหม่อย่างอิสระ คำสั่งสกิล metadata โค้ด คอมเมนต์ และ code blocks ใช้ภาษาอังกฤษ ส่วนคำอธิบายภาษาไทยแยกไว้ในเอกสาร
 
 | Skill | การใช้งาน |
 | --- | --- |
@@ -10,6 +10,9 @@
 | [windows-simulator](skills/windows-simulator/SKILL.md) | เลือกและตั้ง runtime/CI/VM สำหรับการทดสอบ Windows |
 | [analyze-and-rebuild](skills/analyze-and-rebuild/SKILL.md) | วิเคราะห์หลักฐาน สร้าง contract และเขียนใหม่โดยไม่คัดลอก |
 | [rebuild-windows-from-behavior](skills/rebuild-windows-from-behavior/SKILL.md) | วิเคราะห์และสร้างโปรแกรม Windows ใหม่จากพฤติกรรมที่ตรวจได้ |
+| [powershell-code-runner](skills/powershell-code-runner/SKILL.md) | เขียนและตรวจสคริปต์ PowerShell ให้รันได้ทุกเครื่อง และรันโค้ด 53 ภาษา/รูปแบบด้วย `Invoke-Code.ps1` ([คู่มือไทย](docs/powershell-code-runner/README_TH.md)) |
+
+สารบัญสกิลแยกหมวดพร้อมคำอธิบายอยู่ใน [skill for creating code](skill%20for%20creating%20code/README.md)
 
 ## ติดตั้งจากแพ็กเกจหรือ checkout
 
@@ -37,17 +40,17 @@ python -B scripts/install_skills.py --source ../extracted/code-review --all --de
 
 ```sh
 python -B scripts/check_repo.py --test
-python -B scripts/build_release.py --output-dir dist/2.2.0
-python -B scripts/verify_release.py --release-dir dist/2.2.0 --smoke
+python -B scripts/build_release.py --output-dir dist/2.3.0
+python -B scripts/verify_release.py --release-dir dist/2.3.0 --smoke
 ```
 
-ได้ source ZIP, ZIP แยกทั้งหกสกิล, `release-manifest.json` และ `SHA256SUMS` ตัวตรวจตรวจ checksum และรายการไฟล์ทุก ZIP เทียบไฟล์รายสกิลกับ source แล้วติดตั้งทั้งสองรูปแบบในพื้นที่ชั่วคราวนอกรีโปที่มีช่องว่างใน path ทดสอบ CLI ที่ติดตั้งจริงและรันชุดทดสอบจาก source ที่แตก ZIP แล้ว `--smoke` จึงใช้เวลามากกว่าการตรวจ checksum อย่างเดียว
+ได้ source ZIP, ZIP แยกทั้งเจ็ดสกิล, `release-manifest.json` และ `SHA256SUMS` ตัวตรวจตรวจ checksum และรายการไฟล์ทุก ZIP เทียบไฟล์รายสกิลกับ source แล้วติดตั้งทั้งสองรูปแบบในพื้นที่ชั่วคราวนอกรีโปที่มีช่องว่างใน path ทดสอบ CLI ที่ติดตั้งจริงและรันชุดทดสอบจาก source ที่แตก ZIP แล้ว `--smoke` จึงใช้เวลามากกว่าการตรวจ checksum อย่างเดียว
 
 ตัวตรวจนโยบายปฏิเสธภาษาไทยในไฟล์โค้ด/config และ fenced code blocks เอกสารบรรยายภายนอก code block ใช้ภาษาไทยได้ CI ตรวจ Ubuntu/Windows/macOS ด้วย Python 3.10/3.12 พร้อม GUI/launcher/installer บน Windows และตรวจแพ็กเกจที่ build จริงก่อนเก็บ artifact
 
 ## ขอบเขตผลทดสอบ
 
-สี่สกิลที่เป็นคำสั่ง AI ตรวจโครงสร้าง metadata และ references ได้ แต่ไม่ได้เป็น executable โปรแกรม สอง reconstruction toolkits มี CLI ที่รันและทดสอบวงจรงานได้จริง การติดตั้งสกิลไม่สร้าง VM หรือให้สิทธิ์เครื่อง/บัญชีภายนอกอัตโนมัติ
+สี่สกิลที่เป็นคำสั่ง AI ตรวจโครงสร้าง metadata และ references ได้ แต่ไม่ได้เป็น executable โปรแกรม สอง reconstruction toolkits มี CLI ที่รันและทดสอบวงจรงานได้จริง ส่วน powershell-code-runner มีตัวรันและตัวตรวจ PowerShell ที่ชุดทดสอบเรียกด้วย PowerShell และคอมไพเลอร์จริงทุกภาษาที่เครื่องทดสอบติดตั้งไว้ ภาษาที่ไม่มีในเครื่องจะถูกข้ามและแสดงชื่อในผลทดสอบ การติดตั้งสกิลไม่สร้าง VM หรือให้สิทธิ์เครื่อง/บัญชีภายนอกอัตโนมัติ
 
 Media tests ของ [New-Win11ProMedia.ps1](scripts/New-Win11ProMedia.ps1) ใช้ PowerShell กับ Windows command mocks และทดสอบ native copy exit status; ยังไม่ยืนยัน DISM, mount ISO หรือการเขียน USB จริง รูปแบบ contract ของ ARB เป็น schema 2 และ Windows toolkit เป็น schema 1 ใช้แทนกันไม่ได้
 

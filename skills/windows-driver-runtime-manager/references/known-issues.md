@@ -106,6 +106,8 @@
 - `Set-ItemProperty -Type` เป็นพารามิเตอร์ของ registry provider เท่านั้น — เขียนรีจิสทรีผ่าน `Set-DrmRegistryValue` เพื่อ mock ใน Pester ได้ทุกแพลตฟอร์ม
 - Pester: ฟังก์ชันที่ถูกเรียกจากในโมดูลต้อง mock ด้วย `-ModuleName DriverRuntimeManager`
 - `-eq`/`-in` ไม่สนตัวพิมพ์ — ตั้งใจใช้กับ System ID ของ HP และชื่อแอตทริบิวต์ XML
+- ฟังก์ชันที่คืนรายการห้าม `return $null` เมื่อล้มเหลว — `@($null).Count` เป็น 1 ทำให้ซ่อนข้อผิดพลาดจริง (พบใน CI ระหว่างแก้ DRM-119) ให้ `return` เปล่า
+- `expand.exe <cab> -F:* <dir>` ไม่ยอมแตกลงโฟลเดอร์เดียวกับไฟล์ .cab ("Cannot expand a file onto itself") — แตกลงโฟลเดอร์ย่อยเสมอ
 
 ## สิ่งที่ยังไม่ได้ทดสอบบนเครื่องจริง
 

@@ -1415,8 +1415,11 @@ function Get-DrmHpiaPlatformList {
             $sig = Get-DrmFileSignature -Path $cab
             Write-DrmLog ("platformList.cab: {0:N0} ไบต์, ลายเซ็น {1}, ผู้ลงนาม '{2}'" -f (Get-Item -LiteralPath $cab).Length, $sig.Status, $sig.Organization) -Level Debug
             if (-not $sig.IsValid -or $sig.Organization -notmatch '^(HP Inc\.?|Hewlett[- ]Packard)') { throw ("ลายเซ็นของ platformList.cab ไม่ใช่ของ HP (สถานะ {0}, ผู้ลงนาม '{1}')" -f $sig.Status, $sig.Subject) }
-            $p = Invoke-DrmProcess -FilePath (Join-Path (Get-DrmWindowsDir) 'System32\expand.exe') -Arguments ('"{0}" -F:* "{1}"' -f $cab, $work) -Capture -IgnoreDryRun -TimeoutMinutes 2
-            $x = Get-ChildItem -LiteralPath $work -File | Where-Object { $_.Extension -eq '.xml' } | Select-Object -First 1
+            # แตกลงโฟลเดอร์ย่อย — expand.exe ไม่ยอมแตกลงโฟลเดอร์เดียวกับไฟล์ .cab ("Cannot expand a file onto itself")
+            $outDir = Join-Path $work 'out'
+            New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+            $p = Invoke-DrmProcess -FilePath (Join-Path (Get-DrmWindowsDir) 'System32\expand.exe') -Arguments ('"{0}" -F:* "{1}"' -f $cab, $outDir) -Capture -IgnoreDryRun -TimeoutMinutes 2
+            $x = Get-ChildItem -LiteralPath $outDir -File | Where-Object { $_.Extension -eq '.xml' } | Select-Object -First 1
             if (-not $x) { throw ("แตกไฟล์ platformList.cab ไม่ได้ (expand exit {0}: {1})" -f $p.ExitCode, (($p.Output + ' ' + $p.Error).Trim())) }
             Copy-Item -LiteralPath $x.FullName -Destination $xmlPath -Force
             Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

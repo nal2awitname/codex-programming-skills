@@ -1399,9 +1399,10 @@ function Get-DrmComponentVendorTools {
 }
 
 function Get-DrmHpiaPlatformList {
-    <# DRM-119: รายการ System ID ที่ HP Image Assistant รองรับ (platformList.cab จาก HP) แคชไว้ 7 วัน — คืน $null เมื่อดาวน์โหลด/แตกไฟล์ไม่ได้ #>
+    <# DRM-119: รายการ System ID ที่ HP Image Assistant รองรับ (platformList.cab จาก HP) แคชไว้ 7 วัน
+       ไม่ส่งออกอะไรเลยเมื่อดาวน์โหลด/ตรวจลายเซ็น/แตกไฟล์ไม่ได้ (ห้ามคืน $null เพราะ @($null) นับเป็น 1 รายการ) #>
     param([string]$Url = 'https://hpia.hpcloud.hp.com/ref/platformList.cab', [int]$MaxAgeDays = 7)
-    if (-not (Test-DrmIsWindows)) { return $null }
+    if (-not (Test-DrmIsWindows)) { return }
     $session = Get-DrmSession
     $root = if ($session) { $session.Root } else { [IO.Path]::GetTempPath() }
     $xmlPath = Join-Path $root 'hpia-platformList.xml'
@@ -1410,19 +1411,23 @@ function Get-DrmHpiaPlatformList {
         if (-not $fresh) {
             $work = Join-Path $root 'hpia-ref'
             New-Item -ItemType Directory -Force -Path $work | Out-Null
-            $cab = Save-DrmDownload -Url $Url -DestinationDir $work -FileName 'platformList.cab' -Retries 2
+            $cab = [string](@(Save-DrmDownload -Url $Url -DestinationDir $work -FileName 'platformList.cab' -Retries 2) | Select-Object -Last 1)
             $sig = Get-DrmFileSignature -Path $cab
-            if (-not $sig.IsValid -or $sig.Organization -notmatch '^(HP Inc\.?|Hewlett[- ]Packard)') { throw ("ลายเซ็นของ platformList.cab ไม่ใช่ของ HP ({0})" -f $sig.Status) }
+            Write-DrmLog ("platformList.cab: {0:N0} ไบต์, ลายเซ็น {1}, ผู้ลงนาม '{2}'" -f (Get-Item -LiteralPath $cab).Length, $sig.Status, $sig.Organization) -Level Debug
+            if (-not $sig.IsValid -or $sig.Organization -notmatch '^(HP Inc\.?|Hewlett[- ]Packard)') { throw ("ลายเซ็นของ platformList.cab ไม่ใช่ของ HP (สถานะ {0}, ผู้ลงนาม '{1}')" -f $sig.Status, $sig.Subject) }
             $p = Invoke-DrmProcess -FilePath (Join-Path (Get-DrmWindowsDir) 'System32\expand.exe') -Arguments ('"{0}" -F:* "{1}"' -f $cab, $work) -Capture -IgnoreDryRun -TimeoutMinutes 2
-            $x = Get-ChildItem -LiteralPath $work -Filter '*.xml' -File | Select-Object -First 1
-            if (-not $x) { throw ("แตกไฟล์ platformList.cab ไม่ได้ (exit {0})" -f $p.ExitCode) }
+            $x = Get-ChildItem -LiteralPath $work -File | Where-Object { $_.Extension -eq '.xml' } | Select-Object -First 1
+            if (-not $x) { throw ("แตกไฟล์ platformList.cab ไม่ได้ (expand exit {0}: {1})" -f $p.ExitCode, (($p.Output + ' ' + $p.Error).Trim())) }
             Copy-Item -LiteralPath $x.FullName -Destination $xmlPath -Force
             Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
         }
-        return @(ConvertFrom-DrmHpiaPlatformXml -Text ([IO.File]::ReadAllText($xmlPath)))
+        $ids = @(ConvertFrom-DrmHpiaPlatformXml -Text ([IO.File]::ReadAllText($xmlPath)) | Where-Object { $_ } | Sort-Object -Unique)
+        Write-DrmLog ("รายการรุ่นที่ HP Image Assistant รองรับ: {0} System ID" -f $ids.Count) -Level Debug
+        if ($ids.Count -eq 0) { Remove-Item -LiteralPath $xmlPath -Force -ErrorAction SilentlyContinue; throw 'ไม่พบ System ID ในไฟล์ (รูปแบบไฟล์ของ HP อาจเปลี่ยน)' }
+        return $ids
     } catch {
         Write-DrmLog ("อ่านรายการรุ่นที่ HP Image Assistant รองรับไม่ได้ ({0}) — เลือกเครื่องมือจากชื่อรุ่นแทน" -f $_.Exception.Message) -Level Warn
-        return $null
+        return
     }
 }
 

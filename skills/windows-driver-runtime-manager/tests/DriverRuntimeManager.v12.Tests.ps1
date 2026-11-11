@@ -482,6 +482,12 @@ Describe 'DRM-120: รายงานเทียบไดรเวอร์ก�
 }
 
 Describe 'v1.2: Windows จริง' -Tag 'Windows' -Skip:(-not $script:OnWindows) {
+    It 'DRM-119: เมื่อดาวน์โหลดไม่ได้ ไม่ส่ง $null ออกมา (@() ต้องว่าง)' {
+        $s = Initialize-DrmSession -Root (Join-Path $script:TestRoot 'hpia-bad') -NoBrowser
+        @(Get-DrmHpiaPlatformList -Url 'https://127.0.0.1:9/platformList.cab').Count | Should -Be 0
+        [IO.File]::ReadAllText($s.LogFile) | Should -Match 'อ่านรายการรุ่นที่ HP Image Assistant รองรับไม่ได้'
+        Initialize-DrmSession -Root (Join-Path $script:TestRoot 'root') -NoBrowser | Out-Null
+    }
     It 'DRM-106: สแกน Driver Store รอบสองใช้แคชใบรับรองและได้ผลเท่าเดิม' {
         $s = Initialize-DrmSession -Root (Join-Path $script:TestRoot 'certcache') -NoBrowser
         $a = @(Get-DrmDriverPackages)
@@ -508,8 +514,9 @@ Describe 'v1.2: Windows จริง' -Tag 'Windows' -Skip:(-not $script:OnWindo
         $s = Initialize-DrmSession -Root (Join-Path $script:TestRoot 'hpia') -NoBrowser
         $ids = @(Get-DrmHpiaPlatformList)
         $log = [IO.File]::ReadAllText($s.LogFile)
-        if ($ids.Count -eq 0) { throw ("ไม่ได้รายการ: " + (($log -split "`n" | Where-Object { $_ -match 'HP|platformList|ลายเซ็น' }) -join ' | ')) }
-        $ids.Count | Should -BeGreaterThan 100
+        $trace = ($log -split "`n" | Where-Object { $_ -match 'HP|platformList|ลายเซ็น|expand|ดาวน์โหลด' }) -join ' | '
+        Write-Host $trace
+        if ($ids.Count -lt 100) { throw ("ได้ {0} System ID: {1}" -f $ids.Count, $trace) }
         @($ids | Where-Object { $_ -notmatch '^[0-9A-F]{4}$' }).Count | Should -BeLessThan ([Math]::Max(1, [int]($ids.Count / 20)))
         Test-Path -LiteralPath (Join-Path $s.Root 'hpia-platformList.xml') | Should -BeTrue
         Initialize-DrmSession -Root (Join-Path $script:TestRoot 'root') -NoBrowser | Out-Null

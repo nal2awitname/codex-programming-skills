@@ -64,9 +64,12 @@
       "scanArgs": "/scan -silent -report=\"{ReportDir}\" -outputLog=\"{LogFile}\"",
       "applyArgs": "/applyUpdates -silent -reboot=disable -autoSuspendBitLocker=enable -outputLog=\"{LogFile}\"",
       "report": "dell",
-      "successCodes": [0, 1, 5, 500],
-      "rebootCodes": [1, 5],
+      "successCodes": [0, 1, 500],
+      "rebootCodes": [1],
       "noUpdateCodes": [500],
+      "unsupportedCodes": [3, 7],
+      "pendingRebootCodes": [5],
+      "logDirs": ["%ProgramData%\\Dell\\UpdateService\\Log"],
       "supportUrl": "https://www.dell.com/support/home/",
       "note": "ติดตั้ง BIOS ชิปเซ็ต และไดรเวอร์ทั้งหมดตามลำดับที่ Dell กำหนดให้อัตโนมัติ (ระงับ BitLocker ระหว่างอัปเดต BIOS)"
     },
@@ -94,6 +97,13 @@
       "successCodes": [0],
       "rebootCodes": [],
       "noUpdateCodes": [],
+      "preferences": [
+        { "path": "HKLM:\\SOFTWARE\\Lenovo\\System Update\\Preferences\\UserSettings\\General", "name": "DisplayLicenseNotice", "value": "NO" },
+        { "path": "HKLM:\\SOFTWARE\\Lenovo\\System Update\\Preferences\\UserSettings\\General", "name": "DisplayLicenseNoticeSU", "value": "NO" },
+        { "path": "HKLM:\\SOFTWARE\\WOW6432Node\\Lenovo\\System Update\\Preferences\\UserSettings\\General", "name": "DisplayLicenseNotice", "value": "NO" },
+        { "path": "HKLM:\\SOFTWARE\\WOW6432Node\\Lenovo\\System Update\\Preferences\\UserSettings\\General", "name": "DisplayLicenseNoticeSU", "value": "NO" }
+      ],
+      "logDirs": ["%ProgramData%\\Lenovo\\SystemUpdate\\logs", "%ProgramData%\\Lenovo\\SystemUpdate\\sessionSE"],
       "supportUrl": "https://pcsupport.lenovo.com/",
       "note": "ใช้กับ ThinkPad/ThinkCentre/ThinkStation ติดตั้งอัปเดต Critical/Recommended/Optional รวมแพ็กเกจที่ต้องรีสตาร์ท โดยไม่รีสตาร์ทเอง (ผลละเอียดอยู่ใน log ของ System Update)"
     },
@@ -108,20 +118,8 @@
     {
       "vendor": "HP",
       "match": "^(HP|Hewlett)",
-      "modelMatch": "Pavilion|ENVY|Envy|OMEN|Omen|Victus|Spectre|Stream|HP Laptop|All-in-One|Chromebook",
-      "name": "HP Support Assistant",
-      "winget": "HP.SupportAssistant",
-      "automated": false,
-      "launch": [
-        "%ProgramFiles(x86)%\\Hewlett-Packard\\HP Support Framework\\HPSF.exe",
-        "%ProgramFiles%\\HP\\HP Support Assistant\\HPSupportAssistant.exe"
-      ],
-      "supportUrl": "https://support.hp.com/drivers",
-      "note": "เครื่อง HP ผู้ใช้ทั่วไป (Pavilion/ENVY/OMEN/Victus/Spectre) ใช้ HP Support Assistant ซึ่งต้องกดยืนยันในหน้าต่างของ HP"
-    },
-    {
-      "vendor": "HP",
-      "match": "^(HP|Hewlett)",
+      "modelMatch": "(?i)\\b(Elite\\w*|ProBook|ProDesk|ProOne|Pro ?x360|Pro (Mini|Tower|SFF|Micro)|ZBook|Z\\d+( G\\d+)?|Workstation|Engage|Dragonfly|Fortis|mt\\d+|t\\d{3})\\b|\\bHP \\d{3} G\\d+",
+      "platformCheck": "hpia",
       "name": "HP Image Assistant",
       "winget": "HP.ImageAssistant",
       "automated": true,
@@ -134,11 +132,25 @@
       "scanArgs": "/Operation:Analyze /Category:BIOS,Drivers,Firmware /Selection:All /Action:List /Silent /ReportFolder:\"{ReportDir}\"",
       "applyArgs": "/Operation:Analyze /Category:BIOS,Drivers,Firmware /Selection:All /Action:Install /Silent /AutoCleanup /ReportFolder:\"{ReportDir}\" /SoftpaqDownloadFolder:\"{DownloadDir}\"",
       "report": "hpia",
-      "successCodes": [0, 256, 257, 3010, 3020],
-      "rebootCodes": [257, 3010, 3020],
-      "noUpdateCodes": [256],
+      "successCodes": [0, 256, 257, 3010],
+      "rebootCodes": [3010],
+      "noUpdateCodes": [256, 257],
+      "unsupportedCodes": [4096],
       "supportUrl": "https://support.hp.com/drivers",
       "note": "เครื่อง HP เชิงธุรกิจ (EliteBook/ProBook/ZBook/Elite/Pro) วิเคราะห์และติดตั้ง SoftPaq ของ BIOS ไดรเวอร์ และเฟิร์มแวร์ที่ตรงรุ่น"
+    },
+    {
+      "vendor": "HP",
+      "match": "^(HP|Hewlett)",
+      "name": "HP Support Assistant",
+      "winget": "HP.SupportAssistant",
+      "automated": false,
+      "launch": [
+        "%ProgramFiles(x86)%\\Hewlett-Packard\\HP Support Framework\\HPSF.exe",
+        "%ProgramFiles%\\HP\\HP Support Assistant\\HPSupportAssistant.exe"
+      ],
+      "supportUrl": "https://support.hp.com/drivers",
+      "note": "เครื่อง HP ผู้ใช้ทั่วไป (Pavilion/ENVY/OMEN/Victus/Spectre/HP Laptop) หรือรุ่นที่ไม่อยู่ในรายการของ HP Image Assistant ใช้ HP Support Assistant ซึ่งต้องกดยืนยันในหน้าต่างของ HP"
     },
     {
       "vendor": "Microsoft Surface",

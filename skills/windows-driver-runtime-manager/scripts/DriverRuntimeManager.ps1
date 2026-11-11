@@ -56,7 +56,11 @@ $ProgressPreference = 'SilentlyContinue'
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ModulePath = Join-Path $ScriptDir 'DriverRuntimeManager.psm1'
 if (-not $CatalogPath) { $CatalogPath = Join-Path $ScriptDir 'catalog.json' }
-if (-not $LauncherPath) { $LauncherPath = Join-Path $ScriptDir 'Start-DriverRuntimeManager.cmd' }
+if (-not $LauncherPath) {
+    # DRM-102: ถ้าไม่มีตัวเปิด .cmd (คัดลอกมาแค่ .ps1) ให้ RunOnce เรียก .ps1 โดยตรง
+    $cmdLauncher = Join-Path $ScriptDir 'Start-DriverRuntimeManager.cmd'
+    $LauncherPath = if (Test-Path -LiteralPath $cmdLauncher) { $cmdLauncher } else { $MyInvocation.MyCommand.Path }
+}
 try { [Console]::OutputEncoding = [Text.Encoding]::UTF8 } catch { }
 # powershell -File ส่งค่าอาร์เรย์มาเป็นข้อความเดียว: แยก -Items ด้วย , และ -Files ด้วย ;
 $Items = @($Items | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -174,7 +178,7 @@ function Invoke-HeadlessInstall {
     $known = @($scan.Runtimes | ForEach-Object { $_.Id })
     foreach ($missing in @($ids | Where-Object { $known -notcontains $_ } | Select-Object -Unique)) { Write-DrmLog ("ไม่พบรายการ '{0}' สำหรับเครื่องนี้ (สถาปัตยกรรมไม่ตรงหรือไม่มีในแคตตาล็อก) — ข้าม" -f $missing) -Level Warn }
     if ($useWu) {
-        $wuList = Find-DrmWindowsUpdateDrivers -Devices $scan.Devices
+        $wuList = @(Find-DrmWindowsUpdateDrivers -Devices $scan.Devices)
         foreach ($w in @($wuList | Where-Object { $_.Selected })) { $planItems.Add((New-DrmPlanItemFromWindowsUpdate -Driver $w)) }
     }
     $pickedRuntimes = @(Select-DrmRuntimeByPreset -Runtimes $scan.Runtimes -Preset $effectivePreset -Ids $ids)
@@ -186,7 +190,7 @@ function Invoke-HeadlessInstall {
         Write-Host ("บันทึกชุดที่เลือก: {0}" -f $ExportProfile) -ForegroundColor Green
     }
     if ($planItems.Count -eq 0) { Write-Host 'ไม่มีรายการให้ติดตั้ง' -ForegroundColor Yellow; return 0 }
-    $plan = New-DrmPlan -Items $planItems.ToArray()
+    $plan = @(New-DrmPlan -Items $planItems.ToArray())
     Write-Host ''
     Write-Host '=== ลำดับการติดตั้ง ===' -ForegroundColor Cyan
     $plan | Format-Table Sequence, PhaseName, Name -AutoSize | Out-String -Width 200 | Write-Host
@@ -200,7 +204,7 @@ function Invoke-HeadlessInstall {
 }
 
 function Invoke-HeadlessDiagnose {
-    $session = Initialize-DrmSession -Root $Root -Console -NoBrowser
+    [void](Initialize-DrmSession -Root $Root -Console -NoBrowser)
     $catalog = Get-DrmCatalog -Path $CatalogPath
     Set-DrmCatalogCached $catalog
     $d = New-DrmDiagnosticsBundle -SinceHours $SinceHours -Catalog $catalog -IncludeIdentifiers:$IncludeIdentifiers
@@ -357,6 +361,11 @@ $script:Xaml = @'
               <DataGridTextColumn Header="เทียบ" Binding="{Binding Comparison}" Width="150" IsReadOnly="True"/>
               <DataGridTextColumn Header="สถานะ" Binding="{Binding Status}" Width="1.3*" IsReadOnly="True"/>
             </DataGrid.Columns>
+            <DataGrid.ContextMenu>
+              <ContextMenu>
+                <MenuItem x:Name="MenuHideWu" Header="ซ่อนไดรเวอร์นี้จาก Windows Update (ไม่เสนอและไม่ติดตั้งอัตโนมัติอีก)"/>
+              </ContextMenu>
+            </DataGrid.ContextMenu>
           </DataGrid>
         </Grid>
       </TabItem>
@@ -486,7 +495,7 @@ $script:ControlNames = @(
     'BtnPresetNone', 'RtGrid', 'BtnAddFiles', 'BtnAddFolder', 'BtnRemoveFiles', 'FileGrid', 'ChkCleanWork', 'ChkCleanVendor', 'ChkCleanTemp',
     'ChkCleanWu', 'ChkRemoveOld', 'TxtOldCount', 'ChkComponent', 'BtnOpenLogs', 'BtnOpenReport', 'TxtLogPath', 'LogBox', 'BtnInstall', 'BtnStop',
     'ChkRestorePoint', 'ChkBackup', 'ChkResume', 'ChkReboot', 'ChkUnsigned', 'ChkDryRun', 'TxtSummary', 'Progress', 'TxtStatus',
-    'BtnSaveProfile', 'BtnLoadProfile', 'BtnDiag', 'MenuCatalog', 'MenuCopyHwid', 'MenuDetails'
+    'BtnSaveProfile', 'BtnLoadProfile', 'BtnDiag', 'MenuCatalog', 'MenuCopyHwid', 'MenuDetails', 'MenuHideWu'
 )
 
 $script:GridItemCode = @'
@@ -548,7 +557,7 @@ function New-DrmWindow {
 function Invoke-SelfTest {
     $fail = 0
     $catalog = Get-DrmCatalog -Path $CatalogPath
-    $errs = Test-DrmCatalog -Catalog $catalog
+    $errs = @(Test-DrmCatalog -Catalog $catalog)
     if ($errs.Count) { $fail++; Write-Host 'แคตตาล็อกผิดพลาด:' -ForegroundColor Red; $errs | ForEach-Object { Write-Host "  $_" } } else { Write-Host ("แคตตาล็อกถูกต้อง ({0} รายการ, OEM {1})" -f @($catalog.items).Count, @($catalog.oemTools).Count) -ForegroundColor Green }
     $fn = @(Get-Command -Module DriverRuntimeManager).Count
     Write-Host ("โมดูลโหลดแล้ว ({0} ฟังก์ชัน)" -f $fn) -ForegroundColor Green
@@ -610,11 +619,15 @@ Set-DrmCatalogCached $cat
 $d = New-DrmDiagnosticsBundle -SinceHours $P.SinceHours -Catalog $cat -Devices $P.Devices -System $P.System -IncludeIdentifiers:$P.IncludeIdentifiers
 Send-DrmEvent -Type 'DiagResult' -Data @{ Result = $d }
 '@
+$script:HideWuBody = @'
+$r = Hide-DrmWindowsUpdateDriver -UpdateId $P.UpdateId
+Send-DrmEvent -Type 'WuHidden' -Data @{ Id = $P.Id; Result = $r }
+'@
 $script:FilesBody = @'
 $cat = Get-DrmCatalog -Path $P.CatalogPath
 foreach ($path in $P.Paths) {
     Write-DrmLog ("วิเคราะห์ไฟล์: {0}" -f $path)
-    $infos = Get-DrmInstallerInfo -Path $path -Catalog $cat
+    $infos = @(Get-DrmInstallerInfo -Path $path -Catalog $cat)
     if ($infos.Count -eq 0) { Write-DrmLog ("ไม่พบไฟล์ที่ติดตั้งได้ใน {0}" -f $path) -Level Warn }
     Send-DrmEvent -Type 'FileInfo' -Data @{ Infos = $infos }
 }
@@ -767,6 +780,8 @@ function Show-UpdateResult {
         }
         if ($os.Status -eq 'UpToDate') { $oemItem.Selected = $false; $oemItem.Level = 'ok' }
         elseif ($os.Status -eq 'Found') { $oemItem.Selected = $true; $oemItem.Level = 'warn' }
+        elseif ($os.Status -eq 'Unsupported') { $oemItem.Selected = $false; $oemItem.Level = 'warn' }   # DRM-105: ใช้หน้าเว็บผู้ผลิต/Windows Update แทน
+        elseif ($os.Status -eq 'RebootPending') { $oemItem.Level = 'warn' }
     }
     $prevWu = @{}
     foreach ($old in @($script:Updates | Where-Object { $_.Kind -eq 'WuDriver' })) { $prevWu[$old.Id] = $old.Selected; [void]$script:Updates.Remove($old) }
@@ -817,7 +832,8 @@ function Get-UiSelectionProfile {
     $oem = [bool](@($script:Updates | Where-Object { $_.Kind -eq 'OemTool' -and $_.Selected }).Count)
     $wu = [bool](@($script:Updates | Where-Object { $_.Kind -eq 'WuDriver' -and $_.Selected }).Count)
     $vendors = @($script:Updates | Where-Object { $_.Kind -eq 'VendorTool' -and $_.Selected } | ForEach-Object { $_.Data.Vendor })
-    $files = @($script:FilesCol | Where-Object { $_.Selected } | ForEach-Object { [pscustomobject]@{ path = $_.Path; args = $_.Args } })
+    # รหัสผ่านของไฟล์บีบอัด (ช่องตัวเลือกของ Archive) ไม่บันทึกลงไฟล์ชุดที่เลือก
+    $files = @($script:FilesCol | Where-Object { $_.Selected } | ForEach-Object { [pscustomobject]@{ path = $_.Path; args = $(if ($_.Data.Kind -eq 'Archive') { '' } else { $_.Args }) } })
     New-DrmSelectionProfile -RuntimeIds $rt -IncludeOem $oem -IncludeWindowsUpdate $wu -VendorTools $vendors -Files $files -Options (Get-UiOptions) -Name ('บันทึกจากหน้าต่าง ' + $env:COMPUTERNAME)
 }
 
@@ -911,7 +927,7 @@ function Get-UiPlanItems {
         $list.Add((New-DrmPlanItemFromLocal -Info $info))
     }
     foreach ($i in $script:Runtimes) { if ($i.Selected) { $list.Add((New-DrmPlanItemFromRuntime -Runtime $i.Data)) } }
-    return , $list.ToArray()
+    return $list.ToArray()
 }
 
 function Update-SelectionSummary {
@@ -942,9 +958,9 @@ function Start-UiInstall {
 
 function Invoke-UiInstallClick {
     if (Test-UiBusy) { return }
-    $items = Get-UiPlanItems
+    $items = @(Get-UiPlanItems)
     if ($items.Count -eq 0) { [void][Windows.MessageBox]::Show('ยังไม่ได้เลือกรายการใด', 'Driver & Runtime Manager'); return }
-    $plan = New-DrmPlan -Items $items
+    $plan = @(New-DrmPlan -Items $items)
     $lines = $plan | Group-Object PhaseName | ForEach-Object { '• {0}: {1} รายการ' -f $_.Name, $_.Count }
     $dry = [bool]$script:Ui.ChkDryRun.IsChecked
     $msg = "จะดำเนินการตามลำดับต่อไปนี้:`n`n{0}`n`nรวม {1} รายการ{2}`n`nเริ่มเลยหรือไม่?" -f ($lines -join "`n"), $plan.Count, $(if ($dry) { ' (โหมดทดลอง — ไม่ติดตั้งจริง)' } else { '' })
@@ -998,6 +1014,14 @@ function Invoke-UiMessage {
             [void][Windows.MessageBox]::Show(("ติดตั้ง BIOS/ชิปเซ็ตแล้ว ผู้ผลิตแนะนำให้รีสตาร์ทก่อนติดตั้งส่วนที่เหลือ`n`nเครื่องจะรีสตาร์ทใน 60 วินาที แล้วโปรแกรมจะเปิดขึ้นมาทำต่ออีก {0} รายการโดยอัตโนมัติ`n(ยกเลิกการรีสตาร์ทได้ด้วยคำสั่ง shutdown /a)" -f $m.Summary.Remaining), 'รีสตาร์ทตามคำแนะนำผู้ผลิต', 'OK', 'Information')
         }
         'WorkerError' { $script:Ui.TxtStatus.Text = 'ข้อผิดพลาด: ' + $m.Message }
+        'WuHidden' {
+            $it = Find-UiItem $m.Id
+            if ($m.Result.Status -in 'Hidden', 'DryRun') {
+                if ($it -and $m.Result.Status -eq 'Hidden') { [void]$script:Updates.Remove($it) }
+                $script:Ui.TxtStatus.Text = ('{0}: {1}' -f $m.Result.StatusText, $m.Result.Detail)
+                Update-SelectionSummary
+            } else { $script:Ui.TxtStatus.Text = ('ซ่อนไม่สำเร็จ: {0}' -f $m.Result.Detail) }
+        }
         'DiagResult' {
             $script:LastDiag = $m.Result.Path
             $script:Ui.TxtStatus.Text = 'บันทึกข้อมูลดีบักแล้ว: ' + $m.Result.Path
@@ -1028,7 +1052,7 @@ function Start-SmokeTest {
                 foreach ($i in $script:Updates) { $i.Selected = $true }
                 $script:Ui.ChkDryRun.IsChecked = $true
                 Update-SelectionSummary
-                $script:SmokePlan = New-DrmPlan -Items (Get-UiPlanItems)
+                $script:SmokePlan = @(New-DrmPlan -Items @(Get-UiPlanItems))
                 Start-UiInstall -Plan $script:SmokePlan -Options (Get-UiOptions) -Snapshot (Get-DrmCleanupSnapshot)
                 $script:SmokePhase = 'install'
                 return
@@ -1148,6 +1172,14 @@ function Start-Gui {
             [Windows.Clipboard]::SetText($(if ($ids.Count) { $ids -join [Environment]::NewLine } else { $sel.Data.DeviceId }))
             $script:Ui.TxtStatus.Text = 'คัดลอก Hardware ID แล้ว'
         })
+    $u.MenuHideWu.Add_Click({
+            $sel = $script:Ui.UpdGrid.SelectedItem
+            if (-not $sel -or $sel.Kind -ne 'WuDriver') { [void][Windows.MessageBox]::Show('เลือกรายการที่มาจาก Windows Update ก่อน', 'ซ่อนไดรเวอร์'); return }
+            if (Test-UiBusy) { return }
+            $ans = [Windows.MessageBox]::Show(("ซ่อน '{0}' จาก Windows Update?`n`nWindows จะไม่เสนอและไม่ติดตั้งไดรเวอร์นี้อัตโนมัติอีก (เลิกซ่อนได้ที่ Settings > Windows Update หรือเครื่องมือ Show/Hide ของ Microsoft)" -f $sel.Name), 'ซ่อนไดรเวอร์', 'YesNo', 'Question')
+            if ($ans -ne 'Yes') { return }
+            [void](Start-UiWorker -Slot 'main' -Body $script:HideWuBody -Params @{ UpdateId = $sel.Data.UpdateId; Id = $sel.Id } -DryRunMode:([bool]$script:Ui.ChkDryRun.IsChecked))
+        })
     $u.BtnDiag.Add_Click({ Start-UiDiagnostics })
     $u.BtnSaveProfile.Add_Click({
             $dlg = New-Object Microsoft.Win32.SaveFileDialog
@@ -1189,12 +1221,12 @@ function Start-Gui {
         })
     $u.BtnRemoveFiles.Add_Click({ foreach ($s in @($script:Ui.FileGrid.SelectedItems)) { [void]$script:FilesCol.Remove($s) } })
     $u.FileGrid.Add_DragOver({
-            param($sender, $e)
+            $e = $args[1]   # (sender, EventArgs) — ไม่ใช้ชื่อ $sender ซึ่งเป็นตัวแปรอัตโนมัติ
             $e.Effects = if ($e.Data.GetDataPresent([Windows.DataFormats]::FileDrop)) { [Windows.DragDropEffects]::Copy } else { [Windows.DragDropEffects]::None }
             $e.Handled = $true
         })
     $u.FileGrid.Add_Drop({
-            param($sender, $e)
+            $e = $args[1]   # (sender, EventArgs) — ไม่ใช้ชื่อ $sender ซึ่งเป็นตัวแปรอัตโนมัติ
             if ($e.Data.GetDataPresent([Windows.DataFormats]::FileDrop)) { Add-UiPaths @($e.Data.GetData([Windows.DataFormats]::FileDrop)) }
         })
     $u.BtnOpenLogs.Add_Click({ Start-Process explorer.exe $script:Session.Root })
@@ -1210,7 +1242,7 @@ function Start-Gui {
             Add-UiLog '[STOP] ผู้ใช้สั่งหยุด — รายการที่เหลือจะถูกยกเลิก'
         })
     $u.Window.Add_Closing({
-            param($sender, $e)
+            $e = $args[1]   # (sender, EventArgs) — ไม่ใช้ชื่อ $sender ซึ่งเป็นตัวแปรอัตโนมัติ
             if (Test-UiBusy) {
                 $ans = [Windows.MessageBox]::Show('กำลังทำงานอยู่ การปิดตอนนี้อาจทำให้การติดตั้งไม่ครบ ต้องการปิดหรือไม่?', 'ยืนยันการปิด', 'YesNo', 'Warning')
                 if ($ans -ne 'Yes') { $e.Cancel = $true; return }
@@ -1265,6 +1297,11 @@ function Start-Gui {
 # ---------------------------------------------------------------------------
 # จุดเริ่มต้น
 # ---------------------------------------------------------------------------
+# DRM-110: คอนโซลแบบเก่า (conhost) ของ Windows แสดงภาษาไทยเป็นกล่องสี่เหลี่ยม — แนะนำเป็นภาษาอังกฤษล้วน (อ่านได้เสมอ)
+if ($Mode -ne 'Gui' -and (Test-DrmLegacyConsole)) {
+    Write-Host 'Tip: Thai text may appear as boxes in this classic console. Use Windows Terminal, or read the log and HTML report in %ProgramData%\DriverRuntimeManager.' -ForegroundColor DarkYellow
+}
+
 switch ($Mode) {
     'SelfTest' { exit (Invoke-SelfTest) }
     'Scan' { exit (Invoke-HeadlessScan) }

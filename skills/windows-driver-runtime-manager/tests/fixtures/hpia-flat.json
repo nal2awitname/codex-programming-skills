@@ -1,0 +1,13 @@
+{
+  "HPIA": {
+    "HPIAOperation": "Analyze",
+    "ExitCode": 0,
+    "LastOperation": "Analysis",
+    "LastOperationStatus": "Success",
+    "Recommendations": [
+      { "TargetComponent": "BIOS", "TargetVersion": "01.10.00", "ReferenceVersion": "01.12.00", "Comments": "Critical update", "SoftPaqID": "sp150000", "Name": "HP Notebook System BIOS Update", "Type": "BIOS", "RecommendationValue": "Critical", "ReleaseNotesUrl": "https://ftp.hp.com/pub/softpaq/sp150000.html", "Remediation": { "Status": "Ready", "ReturnCode": 0, "ReturnDescription": "" } },
+      { "TargetComponent": "Network", "TargetVersion": "22.200.0.6", "ReferenceVersion": "23.10.0.7", "SoftPaqID": "sp150001", "Name": "Intel Wireless Drivers", "Type": "Drivers", "RecommendationValue": "Recommended" },
+      { "TargetComponent": "Graphics", "TargetVersion": "Not Installed", "ReferenceVersion": "31.0.101.5590", "SoftPaqID": "sp150002", "Name": "Intel Graphics Driver", "Type": "Drivers", "RecommendationValue": "Recommended", "Remediation": { "Status": "Failed", "ReturnCode": 1603, "ReturnDescription": "Install failed" } }
+    ]
+  }
+}

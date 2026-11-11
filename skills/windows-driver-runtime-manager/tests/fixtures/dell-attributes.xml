@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- รูปแบบสำรอง: ข้อมูลเป็น attribute (ตัวอ่านต้องรองรับทั้งสองแบบ) -->
+<Updates xmlns="urn:example:dcu">
+  <Update name="Dell Latitude 5440 System BIOS" version="1.12.0" type="BIOS" category="BIOS" urgency="Urgent" releaseId="ABCDE"/>
+  <Update name="Intel Management Engine Components Installer" version="2410.6.1.0" type="Driver" category="Chipset" urgency="Recommended"/>
+</Updates>

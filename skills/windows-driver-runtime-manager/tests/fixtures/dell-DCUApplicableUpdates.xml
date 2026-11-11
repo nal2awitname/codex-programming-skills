@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ตัวอย่างโครงสร้างรายงาน dcu-cli /scan -report (ชื่อ element ตามที่ชุมชนผู้ดูแลระบบใช้อ่าน) — ไม่มีข้อมูลเครื่องจริง -->
+<updates>
+  <update>
+    <name>Dell Latitude 5440 System BIOS</name>
+    <version>1.12.0</version>
+    <date>2026-09-30T00:00:00</date>
+    <urgency>Urgent</urgency>
+    <type>BIOS</type>
+    <category>BIOS</category>
+    <file>Latitude_5440_1.12.0.exe</file>
+    <bytes>27000000</bytes>
+    <release>ABCDE</release>
+  </update>
+  <update>
+    <name>Intel Chipset Device Software</name>
+    <version>10.1.19.6</version>
+    <date>2026-06-01T00:00:00</date>
+    <urgency>Recommended</urgency>
+    <type>Driver</type>
+    <category>Chipset</category>
+    <release>FGHIJ</release>
+  </update>
+  <update>
+    <name>Realtek High Definition Audio Driver</name>
+    <version>6.0.9600.1</version>
+    <urgency>Optional</urgency>
+    <type>Driver</type>
+    <category>Audio</category>
+  </update>
+</updates>

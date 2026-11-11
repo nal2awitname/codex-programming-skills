@@ -49,7 +49,7 @@
 | --- | --- | --- |
 | `direct` | `url` (https เท่านั้น), `args`, `fileName`, `signer`, `compareVersion`, `kind: appx` | รันไทม์/prereq ต้องอยู่ใน `trustedRuntimeHosts`; ดาวน์โหลด → ตรวจลายเซ็น → เทียบ FileVersion กับที่ติดตั้ง → ติดตั้งเมื่อใหม่กว่า |
 | `winget` | `id`, `architecture` | ติดตั้งแล้วจะใช้ `upgrade --include-unknown`; 0x8A15002B/0x8A150061/0x8A15010D = เป็นปัจจุบัน |
-| `dotnet` | สร้างอัตโนมัติจาก `dynamic: dotnet` | อ่าน `releases-index.json` ทุกครั้ง: ช่อง active/maintenance เลือกให้ ช่อง EOL สองช่องล่าสุดแสดงเป็นทางเลือก |
+| `dotnet` | สร้างอัตโนมัติจาก `dynamic: dotnet` | อ่าน `releases-index.json` ทุกครั้ง: ช่อง active/maintenance เลือกให้ ช่อง EOL สองช่องล่าสุดแสดงเป็นทางเลือก; ตอนติดตั้งอ่าน `releases.json` ของช่องเพื่อเอา URL + SHA512 ของไฟล์ windowsdesktop (อ่านไม่ได้ = แม่แบบ URL + ตรวจลายเซ็น) |
 | `feature` | `name` | `dism /Online /Enable-Feature /All /NoRestart` |
 | `builtin` | `action`: `RepairWinget`, `GameMode`, `HAGS`, `PowerPlan` | บันทึกค่าเดิมลง log เพื่อคืนค่าได้ |
 | `url` | `url` | เปิดหน้าเว็บให้ผู้ใช้ทำต่อ |
@@ -58,7 +58,17 @@
 
 - `oemTools`: `vendor`, `match` (regex ผู้ผลิต), `modelMatch`/`modelExclude`, `name`, `winget`, `automated`, `exe[]`, `exeName`, `launch[]`,
   `scanArgs`, `applyArgs` (แทน `{ReportDir}` `{LogFile}` `{DownloadDir}`), `report` (`dell`/`hpia`), `waitProcess[]`, `successCodes`, `rebootCodes`, `noUpdateCodes`, `supportUrl`, `note`
-  เรียงรายการเฉพาะเจาะจงไว้ก่อนรายการทั่วไปของผู้ผลิตเดียวกัน
+  เรียงรายการเฉพาะเจาะจงไว้ก่อนรายการทั่วไปของผู้ผลิตเดียวกัน ฟิลด์เพิ่มใน 1.2:
+
+  | ฟิลด์ | ความหมาย |
+  | --- | --- |
+  | `unsupportedCodes` | exit code ที่แปลว่าเครื่องมือไม่รองรับรุ่นนี้ → สถานะ "ทำต่อเอง" + เปิด `supportUrl` (Dell 3/7, HPIA 4096) |
+  | `pendingRebootCodes` | exit code ที่แปลว่ามีรีสตาร์ทค้างจากครั้งก่อน → "ทำต่อเอง" + ต้องรีสตาร์ท (Dell 5) |
+  | `preferences[]` | `{ path, name, value }` ค่ารีจิสทรี (REG_SZ) ที่ตั้งก่อนรันเครื่องมือ บันทึกค่าเดิมลง log (Lenovo: ปิดหน้าข้อตกลง) |
+  | `logDirs[]` | โฟลเดอร์ log ของเครื่องมือผู้ผลิตที่ชุดดีบักเก็บไฟล์ล่าสุด |
+  | `platformCheck` | `hpia` = ใช้รายการ System ID ของ HP (`platformList.cab`) ชี้ขาดแทน `modelMatch` เมื่อดาวน์โหลดได้ |
+
+  ความหมายรหัสต้องมาจากเอกสารของผู้ผลิตเท่านั้น และต้องเพิ่มใน `errors.json` (sources `dcu`/`hpia`/`oem`) ด้วย
 - `componentVendors`: `vendor`, `ids[]` (PCI/USB vendor id), `classMatch`, `name`, `winget`, `url`, `note`
 - `installerRules`: `name`, `fileName` (regex), `company`, `text` (regex ใน version info), `args`, `successCodes`, `rebootCodes`, `upToDateCodes`, `notApplicableCodes`
 - `windowsLifecycle`: `build`, `homePro`, `enterprise`, `ltsc` (วันที่ ISO) จาก learn.microsoft.com/windows/release-health — อัปเดตเมื่อมี Windows รุ่นใหม่
@@ -94,8 +104,13 @@
 ## ข้อตกลงของโค้ด
 
 - โมดูลส่งออกทุกฟังก์ชันชื่อ `*-Drm*` GUI และโหมดคำสั่งเรียกฟังก์ชันชุดเดียวกัน
-- ฟังก์ชันที่คืนรายการใช้ `return , $array` จึงได้อาร์เรย์เสมอ (แม้ว่าง/มีตัวเดียว): เก็บใส่ตัวแปรก่อน `| Where-Object` และอย่าครอบด้วย `@()`
-- ต้องรองรับ Windows PowerShell 5.1: ไม่ใช้ `??`, `?.`, ternary, `ForEach-Object -Parallel`, `Join-Path` แบบสามอาร์กิวเมนต์; ระวังตัวแปรอัตโนมัติ (`$args`, `$input`, `$PROFILE`)
+- ฟังก์ชันที่คืนรายการส่งออกทาง pipeline ตามปกติ (ตั้งแต่ 1.2 — ห้ามใช้ `return , $array`): ผู้เรียกครอบด้วย `@(...)` ทุกครั้ง
+  รวมถึงการกำหนดค่าจาก `if` (`$x = @(if (...) { ... })`) — Pester ตรวจว่าไม่มี `return ,` ในโมดูล
+- ต้องรองรับ Windows PowerShell 5.1: ไม่ใช้ `??`, `?.`, ternary, `ForEach-Object -Parallel`, `Join-Path` แบบสามอาร์กิวเมนต์; ระวังตัวแปรอัตโนมัติ (`$args`, `$input`, `$PROFILE`, `$sender`, `$IsWindows`)
+- เขียนรีจิสทรีผ่าน `Set-DrmRegistryValue` และค่าของผู้ใช้ผ่าน `Get-DrmUserRegistryPath` (hive ของผู้ใช้ที่ล็อกอิน ไม่ใช่บัญชี Admin ที่ยกระดับ)
+- ข้อความลับ (รหัสผ่านไฟล์บีบอัด) ส่งให้ `Invoke-DrmProcess -Secret` เพื่อปิดบังใน log
+- ตัวเลือกการติดตั้ง `RestartAfterCheckpoint = $false` ใช้ทดสอบการทำต่อหลังรีสตาร์ทโดยไม่รีสตาร์ทจริง (Pester/CI)
+- โค้ดต้องผ่าน `Invoke-ScriptAnalyzer -Path scripts -Recurse -Settings ./PSScriptAnalyzerSettings.psd1` โดยไม่มีผลลัพธ์
 - ไฟล์ .ps1/.psm1 เป็น UTF-8 มี BOM (ข้อความไทย), .cmd เป็น ASCII + CRLF; วันที่จัดรูปแบบด้วย InvariantCulture
 - GUI ทำงานหนักใน runspace แยก ส่งข้อความผ่าน `ConcurrentQueue` (`Log`, `Progress`, `Download`, `ItemStatus`, `ScanResult`, `UpdateResult`, `FileInfo`, `InstallResult`, `InstallCheckpoint`) และ DispatcherTimer อัปเดตหน้าจอทุก 150 ms
 - โหมดทดลอง (`-DryRun`) ต้องไม่เปลี่ยนแปลงระบบ: ทุกคำสั่งผ่าน `Invoke-DrmProcess` ซึ่งจะบันทึกแทนการรัน
@@ -107,6 +122,8 @@
 ## ทดสอบ
 
 - `Invoke-Pester tests` — ตรรกะ (เวอร์ชัน ลำดับ OEM วงจรชีวิต EKU ชนิดไฟล์ INF แคตตาล็อก รายงาน และรันแผนทั้งหมดแบบทดลอง)
+  และ `tests/DriverRuntimeManager.v12.Tests.ps1` (การแก้ DRM-101–124) ซึ่งใช้ไฟล์ตัวอย่างใน `tests/fixtures/`
+  (รายงาน Dell/HP, `platformList` ของ HP, `releases.json` ของ .NET 10.0 ที่ตัดให้เล็กลง) — ได้รายงานดิบจากเครื่องจริงให้เพิ่มเป็นไฟล์ใหม่ (ลบ Serial ก่อน)
 - `-Mode SelfTest` (ต้อง `-STA`) — โหลด XAML และตัวควบคุมครบ
 - `-Mode Gui -SmokeTestSeconds 900 -SmokeTestReport x.json` — เปิดหน้าต่างจริง สแกนและตรวจอัปเดตผ่าน runspace เลือกชุดเล่นเกม
   เปลี่ยนตัวกรอง แล้วติดตั้งแบบทดลองจากหน้าต่าง บันทึกผล (จำนวนแถวในแต่ละตาราง แผน ผลลัพธ์ ข้อผิดพลาด) แล้วปิดเอง

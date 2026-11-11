@@ -1,0 +1,9 @@
+{
+  "HPIA": {
+    "Recommendations": {
+      "BIOS": [ { "TargetComponent": "BIOS", "TargetVersion": "01.10.00", "ReferenceVersion": "01.12.00", "SoftPaqId": "sp150000", "Name": "HP Notebook System BIOS Update", "RecommendationValue": "Critical" } ],
+      "Drivers": [ { "TargetComponent": "Network", "TargetVersion": "22.200.0.6", "ReferenceVersion": "23.10.0.7", "SoftPaqId": "sp150001", "Name": "Intel Wireless Drivers", "RecommendationValue": "Recommended" } ],
+      "Firmware": []
+    }
+  }
+}

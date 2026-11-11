@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<HPIA>
+  <Recommendations>
+    <BIOS>
+      <Recommendation>
+        <TargetComponent>BIOS</TargetComponent>
+        <TargetVersion>01.10.00</TargetVersion>
+        <ReferenceVersion>01.12.00</ReferenceVersion>
+        <Comments>Critical</Comments>
+        <Solution><Softpaq><Name>HP Notebook System BIOS Update</Name><Id>sp150000</Id><Url>ftp.hp.com/pub/softpaq/sp150001-150500/sp150000.exe</Url></Softpaq></Solution>
+      </Recommendation>
+    </BIOS>
+    <Drivers>
+      <Recommendation>
+        <TargetComponent>Network</TargetComponent>
+        <TargetVersion>22.200.0.6</TargetVersion>
+        <ReferenceVersion>23.10.0.7</ReferenceVersion>
+        <Solution><Softpaq><Name>Intel Wireless Drivers</Name><Id>sp150001</Id></Softpaq></Solution>
+      </Recommendation>
+    </Drivers>
+  </Recommendations>
+</HPIA>

@@ -22,7 +22,7 @@ AfterAll {
 
 Describe 'แคตตาล็อก' {
     It 'ผ่านการตรวจโครงสร้างทั้งหมด' {
-        $errors = Test-DrmCatalog -Catalog $script:Catalog
+        $errors = @(Test-DrmCatalog -Catalog $script:Catalog)
         $errors | Should -BeNullOrEmpty
     }
     It 'id ไม่ซ้ำและทุกรายการมีวิธีติดตั้ง' {
@@ -46,7 +46,7 @@ Describe 'แคตตาล็อก' {
     }
     It 'ตรวจจับแคตตาล็อกที่ผิดพลาดได้' {
         $bad = '{"trustedRuntimeHosts":["aka.ms"],"items":[{"id":"a","name":"A","group":"g","category":"runtime","order":1,"install":[{"type":"direct","url":"http://evil.example/x.exe"}]},{"id":"a","name":"B","group":"g","category":"runtime","order":2,"install":[{"type":"bogus"}]},{"id":"c","name":"C","group":"g","category":"runtime","order":3,"install":[{"type":"direct","url":"https://evil.example/x.exe"}]}],"oemTools":[],"windowsLifecycle":[]}' | ConvertFrom-Json
-        $errors = Test-DrmCatalog -Catalog $bad
+        $errors = @(Test-DrmCatalog -Catalog $bad)
         ($errors -join "`n") | Should -Match 'https'
         ($errors -join "`n") | Should -Match 'id ซ้ำ'
         ($errors -join "`n") | Should -Match 'bogus'
@@ -127,7 +127,7 @@ Describe 'ลำดับติดตั้งตามคำแนะนำผ�
             [pscustomobject]@{ Id = 'v'; Kind = 'VendorTool'; Category = 'driver'; Name = 'intel'; OrderIndex = 50 }
             [pscustomobject]@{ Id = 'a'; Kind = 'Catalog'; Category = 'tool'; Name = 'pt'; OrderIndex = 500 }
         )
-        $plan = New-DrmPlan -Items $items
+        $plan = @(New-DrmPlan -Items $items)
         ($plan | ForEach-Object { $_.Id }) -join ',' | Should -Be 'p,o,v,l1,l2,w,r,a,t'
         $plan[0].Sequence | Should -Be 1
         $plan[-1].Phase | Should -Be 7
@@ -190,7 +190,7 @@ Describe 'ผู้ผลิตเครื่อง (OEM)' {
             [pscustomobject]@{ Name = 'GeForce'; Class = 'Display'; VendorId = '10DE' }
             [pscustomobject]@{ Name = 'NVIDIA USB'; Class = 'USB'; VendorId = '10DE' }
         )
-        $tools = Get-DrmComponentVendorTools -Devices $devices -Catalog $script:Catalog -OemProfile ([pscustomobject]@{ Vendor = 'Other'; BoardVendor = $false })
+        $tools = @(Get-DrmComponentVendorTools -Devices $devices -Catalog $script:Catalog -OemProfile ([pscustomobject]@{ Vendor = 'Other'; BoardVendor = $false }))
         ($tools | ForEach-Object { $_.Vendor }) -join ',' | Should -Be 'Intel,NVIDIA'
         ($tools | Where-Object Vendor -eq 'Intel').Default | Should -BeTrue
     }
@@ -259,14 +259,14 @@ ManufacturerName = "Contoso Graphics"
         $i.Date | Should -Be '2023-07-18'
     }
     It 'โฟลเดอร์ที่มี .inf เป็นแพ็กเกจไดรเวอร์เดียว จัดลำดับตามคลาส และไม่เลือกถ้าไม่มีลายเซ็น' {
-        $infos = Get-DrmInstallerInfo -Path $script:InfDir -Catalog $script:Catalog
+        $infos = @(Get-DrmInstallerInfo -Path $script:InfDir -Catalog $script:Catalog)
         $infos.Count | Should -Be 1
         $infos[0].Kind | Should -Be 'InfFolder'
         $infos[0].OrderIndex | Should -Be 40
         $infos[0].Selected | Should -BeFalse
     }
     It 'ไฟล์ .reg ไม่ถูกเลือกให้อัตโนมัติ' {
-        $infos = Get-DrmInstallerInfo -Path $script:RegFile -Catalog $script:Catalog
+        $infos = @(Get-DrmInstallerInfo -Path $script:RegFile -Catalog $script:Catalog)
         $infos[0].Kind | Should -Be 'Registry'
         $infos[0].Selected | Should -BeFalse
     }
@@ -274,7 +274,7 @@ ManufacturerName = "Contoso Graphics"
         $zip = Join-Path $script:TestRoot 'pkg.zip'
         Compress-Archive -Path (Join-Path $script:InfDir '*') -DestinationPath $zip -Force
         $dest = Join-Path $script:TestRoot 'unzipped'
-        Expand-DrmArchive -Path $zip -Destination $dest | Should -BeTrue
+        (Expand-DrmArchive -Path $zip -Destination $dest).Ok | Should -BeTrue
         Resolve-DrmExtractedInstaller -Dir $dest | Should -Be $dest
     }
     It 'แปลง exit code: <Code> = <Expected>' -ForEach @(
@@ -295,7 +295,7 @@ Describe 'Driver Store และความเข้ากันได้' {
             [pscustomobject]@{ PublishedName = 'oem5.inf'; InfBaseName = 'iastor.inf'; Provider = 'Intel'; ClassName = 'HDC'; Version = '19.0.0.1'; Date = '2023-01-01'; BootCritical = $true }
         )
         $dev = @([pscustomobject]@{ InfName = 'oem3.inf' })
-        $old = Get-DrmOldDriverPackages -Packages $pk -Devices $dev
+        $old = @(Get-DrmOldDriverPackages -Packages $pk -Devices $dev)
         ($old | ForEach-Object { $_.PublishedName }) -join ',' | Should -Be 'oem1.inf'
     }
     It 'รายงานอุปกรณ์มีปัญหาและไดรเวอร์ไม่มีลายเซ็นว่าไม่ผ่าน' {
@@ -304,13 +304,13 @@ Describe 'Driver Store และความเข้ากันได้' {
             [pscustomobject]@{ Name = 'Old printer'; Present = $true; ProblemCode = 0; ProblemText = ''; CertLevel = 'Unsigned' }
             [pscustomobject]@{ Name = 'GPU'; Present = $true; ProblemCode = 0; ProblemText = ''; CertLevel = 'WHQL' }
         )
-        $checks = Get-DrmCompatibilityChecks -Devices $devices
+        $checks = @(Get-DrmCompatibilityChecks -Devices $devices)
         ($checks | Where-Object Check -eq 'อุปกรณ์ที่มีปัญหา/ไม่มีไดรเวอร์').Status | Should -Be 'ไม่ผ่าน'
         ($checks | Where-Object Check -eq 'ไดรเวอร์ไม่มีลายเซ็นที่ถูกต้อง').Detail | Should -Match 'Old printer'
     }
     It 'เครื่องปกติผ่านการตรวจอุปกรณ์และการรับรอง' {
         $devices = @([pscustomobject]@{ Name = 'GPU'; Present = $true; ProblemCode = 0; ProblemText = ''; CertLevel = 'WHQL' })
-        $checks = Get-DrmCompatibilityChecks -Devices $devices
+        $checks = @(Get-DrmCompatibilityChecks -Devices $devices)
         ($checks | Where-Object Area -eq 'อุปกรณ์').Status | Should -Be 'ผ่าน'
         ($checks | Where-Object Check -like 'ไดรเวอร์ผู้ผลิตที่ Microsoft รับรอง*').Status | Should -Be 'ผ่าน'
     }
@@ -353,7 +353,7 @@ Describe 'Log และรายงาน' {
     }
     It 'สร้างรายงาน HTML/JSON และ escape ข้อความอันตราย' {
         $devices = @([pscustomobject]@{ Name = '<script>alert(1)</script>'; Class = 'Display'; VendorName = ''; DriverProvider = 'X'; DriverVersion = '1.0'; DriverDate = '2024-01-01'; InfName = 'oem1.inf'; CertLevel = 'Vendor'; CertText = 'ผู้ผลิตลงนามเอง'; ProblemCode = 0; ProblemText = ''; Present = $true; OrderGroup = 'กราฟิก'; DeviceId = 'PCI\X'; Level = 'warn' })
-        $r = New-DrmReport -Title 'ทดสอบรายงาน' -Devices $devices -Checks (Get-DrmCompatibilityChecks -Devices $devices)
+        $r = New-DrmReport -Title 'ทดสอบรายงาน' -Devices $devices -Checks @(Get-DrmCompatibilityChecks -Devices $devices)
         Test-Path -LiteralPath $r.Html | Should -BeTrue
         Test-Path -LiteralPath $r.Json | Should -BeTrue
         $html = [IO.File]::ReadAllText($r.Html)
@@ -368,17 +368,17 @@ Describe 'รันแผนทั้งหมดในโหมดทดลอ�
     It 'ทุกขั้นทำงานตามลำดับโดยไม่ติดตั้งจริงและไม่มีรายการล้มเหลว' {
         $root = Join-Path $script:TestRoot 'dry'
         $s = Initialize-DrmSession -Root $root -DryRun
-        $all = Get-DrmRuntimeItems -Catalog $script:Catalog -Arch 'x64' -Offline
+        $all = @(Get-DrmRuntimeItems -Catalog $script:Catalog -Arch 'x64' -Offline)
         $rt = @($all | Where-Object { $_.Id -in 'vc14-x64', 'netfx35', 'tweak-gamemode', 'powershell7', 'directx-jun2010' })
         $rt.Count | Should -Be 5
-        $local = Get-DrmInstallerInfo -Path (Join-Path $script:TestRoot 'driverpkg') -Catalog $script:Catalog
+        $local = @(Get-DrmInstallerInfo -Path (Join-Path $script:TestRoot 'driverpkg') -Catalog $script:Catalog)
         $oem = Get-DrmOemProfile -System ([pscustomobject]@{ Hardware = [pscustomobject]@{ Manufacturer = 'Dell Inc.'; Model = 'Latitude 7440'; ProductVersion = ''; SystemFamily = ''; BaseboardManufacturer = '' } }) -Catalog $script:Catalog
         $items = @()
         $items += New-DrmPlanItemFromOem -OemProfile $oem
         $items += New-DrmPlanItemFromLocal -Info $local[0]
         $items += New-DrmPlanItemFromWindowsUpdate -Driver ([pscustomobject]@{ Id = 'wu:1'; UpdateId = '00000000-0000-0000-0000-000000000001'; Title = 'Intel - System - 10.1.19.6'; OrderIndex = 20 })
         foreach ($r in $rt) { $items += New-DrmPlanItemFromRuntime -Runtime $r }
-        $plan = New-DrmPlan -Items $items
+        $plan = @(New-DrmPlan -Items $items)
         $opt = [pscustomobject]@{ CreateRestorePoint = $true; BackupDrivers = $false; ResumeAfterReboot = $true; Reboot = $true; AllowUnsigned = $true; Cleanup = $true; KeepDownloads = $false; CleanVendorFolders = $true; CleanTemp = $false; CleanWuCache = $false; RemoveOldDrivers = $false; ComponentCleanup = $false }
         $sum = Invoke-DrmInstallPlan -Plan $plan -Options $opt -Catalog $script:Catalog -OemProfile $oem
         $sum.Resume | Should -BeFalse
@@ -509,7 +509,7 @@ Describe 'v1.1: ตรวจอายุไดรเวอร์และบั�
             [pscustomobject]@{ Name = 'New GPU'; Present = $true; ProblemCode = 0; CertLevel = 'WHQL'; DriverDate = '2026-09-01' }
             [pscustomobject]@{ Name = 'Inbox disk'; Present = $true; ProblemCode = 0; CertLevel = 'Inbox'; DriverDate = '2006-06-21' }
         )
-        $checks = Get-DrmCompatibilityChecks -Devices $devices -Today ([datetime]'2026-11-10')
+        $checks = @(Get-DrmCompatibilityChecks -Devices $devices -Today ([datetime]'2026-11-10'))
         $c = $checks | Where-Object Area -eq 'อายุไดรเวอร์'
         $c.Status | Should -Be 'เตือน'
         $c.Detail | Should -Match 'Old LAN'
@@ -536,7 +536,7 @@ Describe 'v1.1: แผนติดตั้งแนบวิธีแก้เ�
         $s = Initialize-DrmSession -Root (Join-Path $script:TestRoot 'advice') -NoBrowser
         $exe = (Get-Process -Id $PID).Path
         $info = [pscustomobject]@{ Id = 'file:fake-installer'; Path = $exe; Name = 'fake-installer.exe'; Kind = 'Exe'; Args = '-NoProfile -Command "exit 1603"'; SignatureValid = $true; OrderIndex = 90; OrderGroup = 'อื่น ๆ'; SuccessCodes = @(0); RebootCodes = @(3010); UpToDateCodes = @(1638); NotApplicableCodes = @() }
-        $plan = New-DrmPlan -Items @(New-DrmPlanItemFromLocal -Info $info)
+        $plan = @(New-DrmPlan -Items @(New-DrmPlanItemFromLocal -Info $info))
         $opt = [pscustomobject]@{ CreateRestorePoint = $false; ResumeAfterReboot = $false; Cleanup = $false }
         $sum = Invoke-DrmInstallPlan -Plan $plan -Options $opt -Catalog $script:Catalog
         # Windows คืนรหัสเต็ม ส่วน Linux/macOS ตัด exit code เหลือ 0-255 (1603 -> 67)
@@ -578,12 +578,12 @@ Describe 'Windows จริง' -Tag 'Windows' -Skip:(-not $script:OnWindows) {
         $s.OS.Build | Should -BeGreaterThan 10000
         $s.OS.Architecture | Should -BeIn @('x64', 'arm64', 'x86')
         $s.Lifecycle | Should -Not -BeNullOrEmpty
-        $rows = ConvertTo-DrmSystemRows -System $s
+        $rows = @(ConvertTo-DrmSystemRows -System $s)
         $rows.Count | Should -BeGreaterThan 15
     }
     It 'ตรวจอุปกรณ์และลำดับติดตั้งของทุกอุปกรณ์' {
-        $pk = Get-DrmDriverPackages
-        $d = Get-DrmDeviceInventory -Packages $pk -Catalog $script:Catalog
+        $pk = @(Get-DrmDriverPackages)
+        $d = @(Get-DrmDeviceInventory -Packages $pk -Catalog $script:Catalog)
         $d.Count | Should -BeGreaterThan 10
         @($d | Where-Object { -not $_.OrderIndex }).Count | Should -Be 0
         @($d | Where-Object { $_.CertLevel -eq 'Inbox' }).Count | Should -BeGreaterThan 0
@@ -594,7 +594,7 @@ Describe 'Windows จริง' -Tag 'Windows' -Skip:(-not $script:OnWindows) {
         $sig.IsMicrosoft | Should -BeTrue
     }
     It 'ตรวจรันไทม์ในเครื่องได้' {
-        $rt = Get-DrmRuntimeItems -Catalog $script:Catalog -Offline
+        $rt = @(Get-DrmRuntimeItems -Catalog $script:Catalog -Offline)
         $rt.Count | Should -BeGreaterThan 10
         ($rt | Where-Object Id -eq 'vc14-x64') | Should -Not -BeNullOrEmpty
     }

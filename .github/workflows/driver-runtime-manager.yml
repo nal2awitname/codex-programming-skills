@@ -28,6 +28,13 @@ jobs:
           $c = New-PesterConfiguration
           $c.Run.Path = 'tests'; $c.Run.Exit = $true; $c.Output.Verbosity = 'Detailed'
           Invoke-Pester -Configuration $c
+      - name: PSScriptAnalyzer (no errors or warnings)
+        timeout-minutes: 10
+        run: |
+          Install-Module PSScriptAnalyzer -MinimumVersion 1.21 -Force -Scope CurrentUser
+          $r = @(Invoke-ScriptAnalyzer -Path scripts -Recurse -Settings ./PSScriptAnalyzerSettings.psd1)
+          $r | Format-Table ScriptName, Line, Severity, RuleName, Message -AutoSize -Wrap | Out-String -Width 250 | Write-Host
+          if ($r.Count) { throw "$($r.Count) analyzer finding(s)" }
       - name: Official Microsoft download links resolve
         run: |
           $cat = Get-Content scripts/catalog.json -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -38,12 +45,25 @@ jobs:
             catch { $bad++; Write-Host ("FAIL {0}: {1}" -f $u, $_.Exception.Message) }
           }
           Import-Module ./scripts/DriverRuntimeManager.psm1 -Force
-          foreach ($ch in (Get-DrmDotnetChannels -Catalog $cat)) {
+          foreach ($ch in @(Get-DrmDotnetChannels -Catalog $cat)) {
             foreach ($a in 'x64', 'x86') {
               $u = $cat.dotnet.downloadUrlTemplate.Replace('{version}', $ch.Latest).Replace('{arch}', $a)
               try { $r = Invoke-WebRequest -Uri $u -Method Head -UseBasicParsing -TimeoutSec 60; Write-Host ("{0} {1}" -f $r.StatusCode, $u) }
               catch { $bad++; Write-Host ("FAIL {0}: {1}" -f $u, $_.Exception.Message) }
             }
+            # DRM-107: releases.json ของช่องต้องมีไฟล์ windowsdesktop + SHA512 ของรุ่นล่าสุด และอยู่บนโฮสต์ที่เชื่อถือ
+            try {
+              $rel = Invoke-RestMethod -Uri $ch.ReleasesJson -TimeoutSec 120
+              foreach ($a in 'x64', 'x86', 'arm64') {
+                $f = Select-DrmDotnetFile -Releases $rel -Arch $a -Version $ch.Latest
+                if (-not $f -or $f.Sha512 -notmatch '^[0-9A-F]{128}$' -or @($cat.trustedRuntimeHosts) -notcontains ([Uri]$f.Url).Host) { $bad++; Write-Host ("FAIL releases.json {0} {1}" -f $ch.Channel, $a) }
+                else { Write-Host ("OK   {0} sha512 {1}..." -f $f.Url, $f.Sha512.Substring(0, 16)) }
+              }
+            } catch { $bad++; Write-Host ("FAIL {0}: {1}" -f $ch.ReleasesJson, $_.Exception.Message) }
+          }
+          foreach ($u in 'https://hpia.hpcloud.hp.com/ref/platformList.cab') {
+            try { $r = Invoke-WebRequest -Uri $u -Method Head -UseBasicParsing -TimeoutSec 60; Write-Host ("{0} {1}" -f $r.StatusCode, $u) }
+            catch { $bad++; Write-Host ("FAIL {0}: {1}" -f $u, $_.Exception.Message) }
           }
           if ($bad) { throw "$bad link(s) failed" }
 
@@ -123,6 +143,11 @@ jobs:
           & $exe -NoProfile -ExecutionPolicy Bypass -File scripts/DriverRuntimeManager.ps1 -Mode Scan -CheckUpdates -NoElevate -Root "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\scan"
           if ($LASTEXITCODE -ne 0) { throw "Scan failed ($LASTEXITCODE)" }
           if (-not (Get-ChildItem "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\scan\Reports" -Filter *.html)) { throw 'No HTML report' }
+          # การค้นหา Windows Update ต้องสำเร็จจริง (DRM-127: แบบ asynchronous + เวลาหมด) ไม่ใช่แค่ไม่ล้ม
+          $log = Get-ChildItem "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\scan\Logs" -Filter 'DRM_*.log' | Sort-Object LastWriteTime | Select-Object -Last 1
+          $text = Get-Content $log.FullName -Raw -Encoding UTF8
+          ($text -split "`n" | Select-String -Pattern 'Windows Update|asynchronous|cert|แคช') | ForEach-Object { Write-Host $_.Line.Trim() }
+          if ($text -notmatch 'Windows Update เสนอไดรเวอร์ \d+ รายการ') { throw 'Windows Update search did not complete' }
       - name: Dry run of every item in the correct order
         timeout-minutes: 25
         run: |
@@ -139,8 +164,8 @@ jobs:
           $report = Get-Content $json.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
           $report.Results | Format-Table Name, Status, Method, ExitCode, Detail -AutoSize -Wrap | Out-String -Width 250 | Write-Host
           if ($code -ne 0) { throw "Real install reported failures ($code)" }
-          # เก็บผลใส่ตัวแปรก่อนกรอง (ฟังก์ชันคืนอาร์เรย์เป็นออบเจกต์เดียว ถ้า pipe ตรง ๆ ตัวกรองจะไม่ทำงาน)
-          $again = & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Import-Module ./scripts/DriverRuntimeManager.psm1; `$c = Get-DrmCatalog -Path ./scripts/catalog.json; `$all = Get-DrmRuntimeItems -Catalog `$c -Offline; `$want = 'vc14-x64','vc14-x86','vc2013-x64','vc2010-x64','directx-jun2010','dotnet-desktop-10.0-x64'; 'found=' + @(`$all | Where-Object { `$want -contains `$_.Id -and `$_.Installed }).Count"
+          # ต้องตรวจพบรันไทม์ที่ติดตั้งครบทั้ง 6 รายการ (DRM-019)
+          $again = & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Import-Module ./scripts/DriverRuntimeManager.psm1; `$c = Get-DrmCatalog -Path ./scripts/catalog.json; `$all = @(Get-DrmRuntimeItems -Catalog `$c -Offline); `$want = 'vc14-x64','vc14-x86','vc2013-x64','vc2010-x64','directx-jun2010','dotnet-desktop-10.0-x64'; 'found=' + @(`$all | Where-Object { `$want -contains `$_.Id -and `$_.Installed }).Count"
           Write-Host ($again -join ' ')
           if (($again | Select-Object -Last 1) -ne 'found=6') { throw "Not all installed runtimes are detected after install: $again" }
       - name: Second install pass reinstalls nothing (update only when newer)

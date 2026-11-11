@@ -25,9 +25,10 @@ $script:DrmState = @{
     DotnetIndex    = $null
     CancelNotified = $false
     NoBrowser      = $false
+    WingetSourceUpdated = $false
 }
 
-$script:DrmVersion = '1.1.0'
+$script:DrmVersion = '1.2.0'
 
 $script:Invariant = [Globalization.CultureInfo]::InvariantCulture
 $script:Utf8Bom = New-Object System.Text.UTF8Encoding($true)
@@ -45,6 +46,7 @@ $script:StatusText = @{
     Failed          = 'ล้มเหลว'
     Cancelled       = 'ยกเลิก'
     Manual          = 'เปิดหน้าผู้ผลิตแล้ว (ทำต่อในหน้าต่างผู้ผลิต)'
+    Hidden          = 'ซ่อนจาก Windows Update แล้ว'
     DryRun          = 'ทดลอง (ไม่ได้ติดตั้งจริง)'
     NotApplicable   = 'ไม่เข้ากับเครื่องนี้'
     NotOffered      = 'ไม่ต้องติดตั้งแล้ว (มีรุ่นที่ดีกว่าอยู่แล้ว)'
@@ -210,6 +212,7 @@ function Use-DrmSession {
     $script:DrmState.Console = [bool]$Console
     $script:DrmState.NoBrowser = [bool]$NoBrowser
     $script:DrmState.CancelNotified = $false
+    $script:DrmState.WingetSourceUpdated = $false
 }
 
 function Get-DrmSession { $script:DrmState.Session }
@@ -377,9 +380,11 @@ function Invoke-DrmProcess {
         [switch]$Capture,
         [switch]$Hidden,
         [string[]]$WaitForProcessNames,
-        [switch]$IgnoreDryRun
+        [switch]$IgnoreDryRun,
+        [string[]]$Secret
     )
     $display = ('"{0}" {1}' -f $FilePath, $Arguments).Trim()
+    foreach ($sec in @($Secret | Where-Object { $_ })) { $display = $display.Replace($sec, '********') }   # รหัสผ่านไม่ลง log
     if ($script:DrmState.DryRun -and -not $IgnoreDryRun) {
         Write-DrmLog ("ทดลอง: จะรัน {0}" -f $display) -Level Debug
         return [pscustomobject]@{ ExitCode = 0; TimedOut = $false; Output = ''; Error = ''; Command = $display; Duration = 0; DryRun = $true }
@@ -459,7 +464,7 @@ function Get-DrmCertLevelFromEku {
 function Get-DrmCertificateEku {
     param($Certificate)
     $oids = New-Object System.Collections.Generic.List[string]
-    if (-not $Certificate) { return , $oids.ToArray() }
+    if (-not $Certificate) { return $oids.ToArray() }
     foreach ($ext in $Certificate.Extensions) {
         $eku = $null
         if ($ext -is [System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]) { $eku = $ext }
@@ -468,7 +473,7 @@ function Get-DrmCertificateEku {
         }
         if ($eku) { foreach ($o in $eku.EnhancedKeyUsages) { $oids.Add($o.Value) } }
     }
-    return , $oids.ToArray()
+    return $oids.ToArray()
 }
 
 function Get-DrmCatalogSignerCertificate {
@@ -500,7 +505,7 @@ function Get-DrmFileSignature {
         if ($cert.Subject -match '(?:^|,\s*)CN=("?)([^,"]+)\1') { $result.Signer = $Matches[2] }
         if ($cert.Subject -match '(?:^|,\s*)O=("?)([^,"]+)\1') { $result.Organization = $Matches[2] }
         $result.IsMicrosoft = ($result.Organization -eq 'Microsoft Corporation')
-        $result.CertLevel = Get-DrmCertLevelFromEku -Oids (Get-DrmCertificateEku $cert) -Subject $cert.Subject
+        $result.CertLevel = Get-DrmCertLevelFromEku -Oids @(Get-DrmCertificateEku $cert) -Subject $cert.Subject
     }
     else { $result.CertLevel = 'Unsigned' }
     if ($result.Status -in @('HashMismatch', 'NotTrusted', 'Incompatible')) { $result.CertLevel = 'Invalid' }
@@ -712,7 +717,7 @@ function Test-DrmCatalog {
             if ($v -and -not (ConvertTo-DrmDate $v)) { $errors.Add("windowsLifecycle $($l.build) วันที่ไม่ถูกต้อง: $v") }
         }
     }
-    return , $errors.ToArray()
+    return $errors.ToArray()
 }
 
 # ---------------------------------------------------------------------------
@@ -770,6 +775,13 @@ function Get-DrmPendingReboot {
 function Get-DrmRegistryValue {
     param([string]$Path, [string]$Name)
     try { return (Get-ItemProperty -LiteralPath $Path -Name $Name -ErrorAction Stop).$Name } catch { return $null }
+}
+
+function Set-DrmRegistryValue {
+    <# เขียนค่ารีจิสทรี (สร้างคีย์ให้ถ้ายังไม่มี) — จุดเดียวที่ทดสอบแทนได้ใน Pester #>
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Name, $Value, [ValidateSet('String', 'DWord', 'QWord', 'ExpandString', 'MultiString', 'Binary')][string]$Type = 'String')
+    if (-not (Test-Path -LiteralPath $Path)) { New-Item -Path $Path -Force | Out-Null }
+    Set-ItemProperty -LiteralPath $Path -Name $Name -Value $Value -Type $Type -ErrorAction Stop
 }
 
 function Get-DrmWingetPath {
@@ -1039,7 +1051,7 @@ function ConvertTo-DrmSystemRows {
     if ($null -ne $System.Internet) { & $add 'เครือข่าย' 'เชื่อมต่อเซิร์ฟเวอร์ Microsoft' $(if ($System.Internet) { 'ได้' } else { 'ไม่ได้' }) $(if ($System.Internet) { 'ok' } else { 'error' }) }
     & $add 'สิทธิ์' 'Administrator' $(if ($System.IsAdmin) { 'ใช่' } else { 'ไม่ — ต้องรันแบบ Administrator' }) $(if ($System.IsAdmin) { 'ok' } else { 'error' })
     foreach ($w in @($System.Warnings)) { & $add 'คำเตือน' 'การสแกน' $w 'warn' }
-    return , $rows.ToArray()
+    return $rows.ToArray()
 }
 
 # ---------------------------------------------------------------------------
@@ -1088,21 +1100,84 @@ function Get-DrmCertLevelFromSigner {
     return 'Unknown'
 }
 
+# ---------------------------------------------------------------------------
+# DRM-106: แคชระดับการรับรองของไฟล์ .cat (คีย์ = path, ตรวจซ้ำเมื่อเวลาแก้ไข/ขนาดเปลี่ยน หรือเกิน 30 วัน)
+# ---------------------------------------------------------------------------
+function Get-DrmCertCachePath {
+    $s = Get-DrmSession
+    if ($s) { return (Join-Path $s.Root 'cert-cache.json') }
+    return $null
+}
+
+function Read-DrmCertCache {
+    param([string]$Path)
+    $cache = @{}
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path)) { return $cache }
+    try {
+        $j = [IO.File]::ReadAllText($Path, [Text.Encoding]::UTF8) | ConvertFrom-Json
+        if ([int](Get-DrmProp $j 'schemaVersion' 0) -ne 1) { return $cache }
+        foreach ($p in @($j.entries.PSObject.Properties)) {
+            $cache[$p.Name] = @{ Stamp = [string]$p.Value.stamp; Level = [string]$p.Value.level; Checked = [string]$p.Value.checked }
+        }
+    } catch { Write-DrmLog ("อ่านแคชใบรับรองไม่ได้ ({0}) — ตรวจใหม่ทั้งหมด" -f $_.Exception.Message) -Level Debug }
+    return $cache
+}
+
+function Save-DrmCertCache {
+    param([hashtable]$Cache, [string]$Path)
+    if (-not $Path -or $null -eq $Cache) { return }
+    try {
+        $entries = [ordered]@{}
+        foreach ($k in @($Cache.Keys | Sort-Object)) { $entries[$k] = [ordered]@{ stamp = $Cache[$k].Stamp; level = $Cache[$k].Level; checked = $Cache[$k].Checked } }
+        $json = [ordered]@{ schemaVersion = 1; entries = $entries } | ConvertTo-Json -Depth 4
+        [IO.File]::WriteAllText($Path, $json, (New-Object System.Text.UTF8Encoding($false)))
+    } catch { Write-DrmLog ("บันทึกแคชใบรับรองไม่ได้: {0}" -f $_.Exception.Message) -Level Debug }
+}
+
+function Get-DrmCatalogCertLevel {
+    <# ระดับการรับรองของไฟล์ .cat โดยใช้แคชเมื่อไฟล์ไม่เปลี่ยน — คืน @{ Level; Cached } #>
+    param([Parameter(Mandatory)][string]$Path, [hashtable]$Cache, [int]$MaxAgeDays = 30, [datetime]$Now = (Get-Date))
+    $fi = Get-Item -LiteralPath $Path -ErrorAction Stop
+    $key = $fi.FullName.ToLowerInvariant()
+    $stamp = '{0}|{1}' -f $fi.LastWriteTimeUtc.Ticks, $fi.Length
+    if ($null -ne $Cache -and $Cache.ContainsKey($key)) {
+        $e = $Cache[$key]
+        $checked = ConvertTo-DrmDate $e.Checked
+        if ($e.Stamp -eq $stamp -and $e.Level -and $checked -and ($Now - $checked).TotalDays -le $MaxAgeDays) {
+            return [pscustomobject]@{ Level = $e.Level; Cached = $true }
+        }
+    }
+    $level = (Get-DrmFileSignature -Path $fi.FullName).CertLevel
+    # ผลที่อาจเปลี่ยนเองตามเวลา (ใบรับรองหมดอายุ/ถูกเพิกถอน หรืออ่านไม่ได้) ไม่เก็บแคช
+    if ($null -ne $Cache -and $level -notin 'Invalid', 'Unknown') {
+        $Cache[$key] = @{ Stamp = $stamp; Level = $level; Checked = $Now.ToString('yyyy-MM-dd', $script:Invariant) }
+    }
+    return [pscustomobject]@{ Level = $level; Cached = $false }
+}
+
 function Get-DrmDriverPackages {
     <# แพ็กเกจไดรเวอร์ของผู้ผลิตใน Driver Store (oem*.inf) พร้อมระดับการรับรองจาก catalog #>
     [CmdletBinding()]
-    param([switch]$SkipCertificates)
+    param([switch]$SkipCertificates, [switch]$NoCache)
     $list = New-Object System.Collections.Generic.List[object]
     $pk = @()
     try { $pk = @(Get-WindowsDriver -Online -ErrorAction Stop) }
-    catch { Write-DrmLog ("อ่าน Driver Store ไม่ได้: {0}" -f $_.Exception.Message) -Level Warn; return , $list.ToArray() }
+    catch { Write-DrmLog ("อ่าน Driver Store ไม่ได้: {0}" -f $_.Exception.Message) -Level Warn; return $list.ToArray() }
+    $cachePath = if ($NoCache) { $null } else { Get-DrmCertCachePath }
+    $cache = if ($SkipCertificates) { $null } else { Read-DrmCertCache -Path $cachePath }
+    $hits = 0; $checkedCount = 0
+    $sw = [Diagnostics.Stopwatch]::StartNew()
     foreach ($p in $pk) {
         $orig = [string]$p.OriginalFileName
         $cat = $null; $level = 'Unknown'
         if (-not $SkipCertificates -and $orig) {
             $dir = Split-Path -Path $orig -Parent
             $cat = Get-ChildItem -LiteralPath $dir -Filter '*.cat' -File -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($cat) { $level = (Get-DrmFileSignature -Path $cat.FullName).CertLevel } else { $level = 'Unsigned' }
+            if ($cat) {
+                $cl = Get-DrmCatalogCertLevel -Path $cat.FullName -Cache $cache
+                $level = $cl.Level
+                if ($cl.Cached) { $hits++ } else { $checkedCount++ }
+            } else { $level = 'Unsigned' }
         }
         $list.Add([pscustomobject]@{
                 PublishedName    = [string]$p.Driver
@@ -1117,7 +1192,11 @@ function Get-DrmDriverPackages {
                 CertLevel        = $level
             })
     }
-    return , $list.ToArray()
+    if (-not $SkipCertificates) {
+        if ($checkedCount -gt 0) { Save-DrmCertCache -Cache $cache -Path $cachePath }
+        Write-DrmLog ("ตรวจใบรับรองไดรเวอร์ {0} แพ็กเกจใน {1:N1} วินาที (ใช้แคช {2}, ตรวจใหม่ {3})" -f $pk.Count, $sw.Elapsed.TotalSeconds, $hits, $checkedCount) -Level Debug
+    }
+    return $list.ToArray()
 }
 
 function Get-DrmDeviceInventory {
@@ -1186,7 +1265,7 @@ function Get-DrmDeviceInventory {
             })
     }
     $sorted = @($list.ToArray() | Sort-Object OrderIndex, Class, Name)
-    return , $sorted
+    return $sorted
 }
 
 function Get-DrmOldDriverPackages {
@@ -1212,26 +1291,35 @@ function Get-DrmOldDriverPackages {
             $result.Add([pscustomobject]@{ PublishedName = $p.PublishedName; InfBaseName = $p.InfBaseName; Provider = $p.Provider; ClassName = $p.ClassName; Version = $p.Version; Date = $p.Date; NewerVersion = $newest.Version })
         }
     }
-    return , $result.ToArray()
+    return $result.ToArray()
 }
 
 # ---------------------------------------------------------------------------
 # ผู้ผลิตเครื่อง (OEM) และผู้ผลิตชิ้นส่วน
 # ---------------------------------------------------------------------------
 function Get-DrmOemProfile {
-    param([Parameter(Mandatory)]$System, [Parameter(Mandatory)]$Catalog)
+    <# เลือกเครื่องมืออัปเดตของผู้ผลิตเครื่อง — $HpiaPlatforms = รายการ System ID ที่ HP Image Assistant รองรับ (จาก HP) ถ้ามีจะใช้แทนการเดาจากชื่อรุ่น (DRM-119) #>
+    param([Parameter(Mandatory)]$System, [Parameter(Mandatory)]$Catalog, [string[]]$HpiaPlatforms)
     $hw = $System.Hardware
     $junk = '^(System manufacturer|System Manufacturer|To Be Filled By O\.E\.M\.|Default string|O\.E\.M\.|OEM|Not Applicable|Not Specified|)$'
     $mf = [string]$hw.Manufacturer
     $isBoardVendor = $false
     if ($mf -match $junk) { $mf = [string]$hw.BaseboardManufacturer; $isBoardVendor = $true }
     $modelText = ('{0} {1} {2}' -f $hw.Model, $hw.ProductVersion, $hw.SystemFamily)
+    $boardId = ([string](Get-DrmProp $hw 'BaseboardProduct' '')).Trim()
     foreach ($t in @($Catalog.oemTools)) {
         if ($mf -notmatch $t.match) { continue }
-        $mm = Get-DrmProp $t 'modelMatch'
-        if ($mm -and $modelText -notmatch $mm) { continue }
         $mx = Get-DrmProp $t 'modelExclude'
         if ($mx -and $modelText -match $mx) { continue }
+        $mm = Get-DrmProp $t 'modelMatch'
+        $platformCheck = [string](Get-DrmProp $t 'platformCheck' '')
+        $how = ''
+        if ($platformCheck -eq 'hpia' -and @($HpiaPlatforms).Count -gt 0 -and $boardId) {
+            # รายการของ HP ชี้ขาด: System ID (Win32_BaseBoard.Product) ต้องอยู่ใน platformList ของ HPIA
+            if (@($HpiaPlatforms | Where-Object { $_ -eq $boardId }).Count -eq 0) { continue }
+            $how = ('System ID {0} อยู่ในรายการรุ่นที่ HP Image Assistant รองรับ' -f $boardId)
+        }
+        elseif ($mm -and $modelText -notmatch $mm) { continue }
         return [pscustomobject]@{
             Vendor        = $t.vendor
             Name          = $t.name
@@ -1248,15 +1336,20 @@ function Get-DrmOemProfile {
             SuccessCodes  = @(Get-DrmProp $t 'successCodes' @(0))
             RebootCodes   = @(Get-DrmProp $t 'rebootCodes' @())
             NoUpdateCodes = @(Get-DrmProp $t 'noUpdateCodes' @())
+            UnsupportedCodes = @(Get-DrmProp $t 'unsupportedCodes' @())
+            PendingRebootCodes = @(Get-DrmProp $t 'pendingRebootCodes' @())
+            Preferences   = @(Get-DrmProp $t 'preferences' @())
+            LogDirs       = @(Get-DrmProp $t 'logDirs' @())
             SupportUrl    = [string]$t.supportUrl
             Note          = [string](Get-DrmProp $t 'note' '')
+            MatchedBy     = $how
             BoardVendor   = $isBoardVendor
             Manufacturer  = $mf
         }
     }
     return [pscustomobject]@{
         Vendor = 'Other'; Name = 'Windows Update + เครื่องมือผู้ผลิตชิ้นส่วน'; Automated = $false; WindowsUpdate = $true; Winget = ''; Exe = @(); ExeName = ''; Launch = @()
-        ScanArgs = ''; ApplyArgs = ''; Report = ''; WaitProcess = @(); SuccessCodes = @(0); RebootCodes = @(); NoUpdateCodes = @(); SupportUrl = ''
+        ScanArgs = ''; ApplyArgs = ''; Report = ''; WaitProcess = @(); SuccessCodes = @(0); RebootCodes = @(); NoUpdateCodes = @(); UnsupportedCodes = @(); PendingRebootCodes = @(); Preferences = @(); LogDirs = @(); SupportUrl = ''; MatchedBy = ''
         Note = "ไม่พบเครื่องมืออัปเดตเฉพาะของผู้ผลิต '$mf' — ใช้ไฟล์จากเว็บผู้ผลิต (แท็บติดตั้งจากไฟล์) ร่วมกับ Windows Update"
         BoardVendor = $isBoardVendor; Manufacturer = $mf
     }
@@ -1302,35 +1395,163 @@ function Get-DrmComponentVendorTools {
                 Default  = ($diy -and [bool](Get-DrmProp $v 'winget'))
             })
     }
-    return , $out.ToArray()
+    return $out.ToArray()
+}
+
+function Get-DrmHpiaPlatformList {
+    <# DRM-119: รายการ System ID ที่ HP Image Assistant รองรับ (platformList.cab จาก HP) แคชไว้ 7 วัน — คืน $null เมื่อดาวน์โหลด/แตกไฟล์ไม่ได้ #>
+    param([string]$Url = 'https://hpia.hpcloud.hp.com/ref/platformList.cab', [int]$MaxAgeDays = 7)
+    if (-not (Test-DrmIsWindows)) { return $null }
+    $session = Get-DrmSession
+    $root = if ($session) { $session.Root } else { [IO.Path]::GetTempPath() }
+    $xmlPath = Join-Path $root 'hpia-platformList.xml'
+    try {
+        $fresh = (Test-Path -LiteralPath $xmlPath) -and ((Get-Date) - (Get-Item -LiteralPath $xmlPath).LastWriteTime).TotalDays -le $MaxAgeDays
+        if (-not $fresh) {
+            $work = Join-Path $root 'hpia-ref'
+            New-Item -ItemType Directory -Force -Path $work | Out-Null
+            $cab = Save-DrmDownload -Url $Url -DestinationDir $work -FileName 'platformList.cab' -Retries 2
+            $sig = Get-DrmFileSignature -Path $cab
+            if (-not $sig.IsValid -or $sig.Organization -notmatch '^(HP Inc\.?|Hewlett[- ]Packard)') { throw ("ลายเซ็นของ platformList.cab ไม่ใช่ของ HP ({0})" -f $sig.Status) }
+            $p = Invoke-DrmProcess -FilePath (Join-Path (Get-DrmWindowsDir) 'System32\expand.exe') -Arguments ('"{0}" -F:* "{1}"' -f $cab, $work) -Capture -IgnoreDryRun -TimeoutMinutes 2
+            $x = Get-ChildItem -LiteralPath $work -Filter '*.xml' -File | Select-Object -First 1
+            if (-not $x) { throw ("แตกไฟล์ platformList.cab ไม่ได้ (exit {0})" -f $p.ExitCode) }
+            Copy-Item -LiteralPath $x.FullName -Destination $xmlPath -Force
+            Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        return @(ConvertFrom-DrmHpiaPlatformXml -Text ([IO.File]::ReadAllText($xmlPath)))
+    } catch {
+        Write-DrmLog ("อ่านรายการรุ่นที่ HP Image Assistant รองรับไม่ได้ ({0}) — เลือกเครื่องมือจากชื่อรุ่นแทน" -f $_.Exception.Message) -Level Warn
+        return $null
+    }
+}
+
+function ConvertFrom-DrmHpiaPlatformXml {
+    param([Parameter(Mandatory)][string]$Text)
+    [xml]$x = $Text
+    foreach ($n in @($x.SelectNodes('//*[local-name()="Platform"]/*[local-name()="SystemID"]'))) {
+        foreach ($id in ([string]$n.InnerText -split '[,;\s]+')) { if ($id) { $id.Trim().ToUpperInvariant() } }
+    }
+}
+
+function Get-DrmXmlValue {
+    <# ค่าจาก element ลูกหรือ attribute ที่ชื่อตรงกัน (ไม่สนตัวพิมพ์และ namespace) #>
+    param($Node, [string[]]$Names)
+    foreach ($nm in $Names) {
+        $low = $nm.ToLowerInvariant()
+        foreach ($a in @($Node.Attributes)) { if ($a -and $a.LocalName.ToLowerInvariant() -eq $low -and $a.Value) { return [string]$a.Value } }
+        foreach ($c in @($Node.ChildNodes)) { if ($c.NodeType -eq 'Element' -and $c.LocalName.ToLowerInvariant() -eq $low -and $c.InnerText) { return ([string]$c.InnerText).Trim() } }
+    }
+    return ''
+}
+
+function Get-DrmJsonRecommendations {
+    <# หาออบเจกต์ที่เป็นรายการแนะนำของ HPIA ทุกระดับความลึก (รายงานบางรุ่นจัดกลุ่มตาม BIOS/Drivers/Firmware) #>
+    param($Node, [string]$Group = '', [int]$Depth = 0)
+    if ($null -eq $Node -or $Depth -gt 8) { return }
+    if ($Node -is [string] -or $Node -is [ValueType]) { return }
+    if ($Node -is [Collections.IEnumerable] -and -not ($Node -is [Collections.IDictionary])) {
+        foreach ($e in $Node) { Get-DrmJsonRecommendations -Node $e -Group $Group -Depth ($Depth + 1) }
+        return
+    }
+    $props = @($Node.PSObject.Properties | ForEach-Object { $_.Name })
+    if (@($props | Where-Object { $_ -in 'ReferenceVersion', 'RecommendationValue', 'SoftPaqId', 'TargetComponent' }).Count -ge 2) {
+        [pscustomobject]@{ Node = $Node; Group = $Group }
+        return
+    }
+    foreach ($p in $Node.PSObject.Properties) { Get-DrmJsonRecommendations -Node $p.Value -Group $(if ($p.Name -in 'HPIA', 'Recommendations', 'Recommendation', 'Items') { $Group } else { $p.Name }) -Depth ($Depth + 1) }
+}
+
+function ConvertFrom-DrmDellReport {
+    <# DCUApplicableUpdates.xml ของ Dell Command | Update: <updates><update><name/><version/><date/><urgency/><type/><category/>... (รองรับทั้ง element และ attribute) #>
+    param([Parameter(Mandatory)][string]$Text)
+    [xml]$x = $Text
+    foreach ($n in @($x.SelectNodes('//*[translate(local-name(),"UPDATE","update")="update"]'))) {
+        $name = Get-DrmXmlValue $n 'name', 'title', 'displayName'
+        if (-not $name) { continue }
+        [pscustomobject]@{
+            Name = $name; Version = (Get-DrmXmlValue $n 'version', 'vendorVersion', 'dellVersion'); Installed = (Get-DrmXmlValue $n 'installedVersion', 'currentVersion')
+            Category = (Get-DrmXmlValue $n 'category'); Type = (Get-DrmXmlValue $n 'type', 'componentType'); Date = (Get-DrmXmlValue $n 'date', 'releaseDate')
+            Urgency = (Get-DrmXmlValue $n 'urgency', 'criticality'); Id = (Get-DrmXmlValue $n 'release', 'releaseId', 'id')
+        }
+    }
+}
+
+function ConvertFrom-DrmHpiaReport {
+    <# รายงานของ HP Image Assistant: JSON (HPIA.Recommendations[]) หรือ XML (HPIA/Recommendations/<หมวด>/Recommendation) #>
+    param([Parameter(Mandatory)][string]$Text, [ValidateSet('json', 'xml')][string]$Format = 'json')
+    if ($Format -eq 'json') {
+        $j = $Text | ConvertFrom-Json
+        $root = if ($j.PSObject.Properties['HPIA']) { $j.HPIA } else { $j }
+        $start = if ($root.PSObject.Properties['Recommendations']) { $root.Recommendations } else { $root }
+        foreach ($hit in @(Get-DrmJsonRecommendations -Node $start)) {
+            $r = $hit.Node
+            $sp = Get-DrmProp $r 'Solution'
+            $spId = [string](Get-DrmProp $r 'SoftPaqId' '')
+            if (-not $spId -and $sp) { $spId = [string](Get-DrmProp (Get-DrmProp $sp 'Softpaq') 'Id' '') }
+            $rem = Get-DrmProp $r 'Remediation'
+            [pscustomobject]@{
+                Name = [string](Get-DrmProp $r 'Name' (Get-DrmProp $r 'TargetComponent' '')); Version = [string](Get-DrmProp $r 'ReferenceVersion' ''); Installed = [string](Get-DrmProp $r 'TargetVersion' '')
+                Category = [string]$(if ($hit.Group) { $hit.Group } else { Get-DrmProp $r 'TargetComponent' '' }); Type = [string](Get-DrmProp $r 'RecommendationValue' ''); Date = ''
+                Urgency = [string](Get-DrmProp $r 'RecommendationValue' ''); Id = $spId
+                Status = [string]$(if ($rem) { Get-DrmProp $rem 'Status' '' } else { '' }); ReturnCode = $(if ($rem) { Get-DrmProp $rem 'ReturnCode' $null } else { $null })
+            }
+        }
+        return
+    }
+    [xml]$x = $Text
+    foreach ($n in @($x.SelectNodes('//*[local-name()="Recommendation"]'))) {
+        $spNode = $n.SelectSingleNode('.//*[local-name()="Softpaq"]')
+        [pscustomobject]@{
+            Name = $(if ($spNode) { Get-DrmXmlValue $spNode 'Name' } else { '' }) ; Version = (Get-DrmXmlValue $n 'ReferenceVersion'); Installed = (Get-DrmXmlValue $n 'TargetVersion')
+            Category = [string]$n.ParentNode.LocalName; Type = (Get-DrmXmlValue $n 'Type'); Date = ''; Urgency = (Get-DrmXmlValue $n 'Value', 'RecommendationValue')
+            Id = $(if ($spNode) { Get-DrmXmlValue $spNode 'Id' } else { '' }); Status = ''; ReturnCode = $null
+        } | ForEach-Object { if (-not $_.Name) { $_.Name = Get-DrmXmlValue $n 'TargetComponent' }; $_ }
+    }
 }
 
 function Read-DrmOemReport {
+    <# DRM-101: อ่านรายงานดิบของ Dell/HP แบบทนต่อรูปแบบที่ต่างกันในแต่ละรุ่นของเครื่องมือ #>
     param([string]$Kind, [string]$Dir)
     $items = New-Object System.Collections.Generic.List[object]
-    if (-not $Dir -or -not (Test-Path -LiteralPath $Dir)) { return , $items.ToArray() }
-    try {
-        if ($Kind -eq 'dell') {
-            foreach ($f in Get-ChildItem -LiteralPath $Dir -Filter '*.xml' -Recurse -File -ErrorAction SilentlyContinue) {
-                [xml]$x = [IO.File]::ReadAllText($f.FullName)
-                foreach ($n in @($x.SelectNodes('//update'))) {
-                    $get = { param($k) $c = $n.SelectSingleNode($k); if ($c) { $c.InnerText } else { '' } }
-                    $items.Add([pscustomobject]@{ Name = (& $get 'name'); Version = (& $get 'version'); Category = (& $get 'category'); Type = (& $get 'type'); Date = (& $get 'date'); Urgency = (& $get 'urgency') })
-                }
+    if (-not $Dir -or -not (Test-Path -LiteralPath $Dir)) { return $items.ToArray() }
+    $files = @(Get-ChildItem -LiteralPath $Dir -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.xml', '.json' } | Sort-Object LastWriteTime -Descending)
+    foreach ($f in $files) {
+        try {
+            $text = [IO.File]::ReadAllText($f.FullName)
+            $found = @()
+            if ($Kind -eq 'dell' -and $f.Extension -eq '.xml') { $found = @(ConvertFrom-DrmDellReport -Text $text) }
+            elseif ($Kind -eq 'hpia') {
+                # JSON ก่อน (มีสถานะติดตั้ง) แล้วจึง XML ถ้า JSON ไม่มีรายการ
+                if ($f.Extension -eq '.json') { $found = @(ConvertFrom-DrmHpiaReport -Text $text -Format json) }
+                elseif (@($files | Where-Object { $_.Extension -eq '.json' }).Count -eq 0 -or $items.Count -eq 0) { $found = @(ConvertFrom-DrmHpiaReport -Text $text -Format xml) }
             }
-        }
-        elseif ($Kind -eq 'hpia') {
-            foreach ($f in Get-ChildItem -LiteralPath $Dir -Filter '*.json' -Recurse -File -ErrorAction SilentlyContinue) {
-                $j = [IO.File]::ReadAllText($f.FullName) | ConvertFrom-Json
-                $recs = @()
-                if ($j.PSObject.Properties['HPIA'] -and $j.HPIA.PSObject.Properties['Recommendations']) { $recs = @($j.HPIA.Recommendations) }
-                foreach ($r in $recs) {
-                    $items.Add([pscustomobject]@{ Name = (Get-DrmProp $r 'Name' ''); Version = (Get-DrmProp $r 'ReferenceVersion' ''); Installed = (Get-DrmProp $r 'TargetVersion' ''); Category = (Get-DrmProp $r 'TargetComponent' ''); Type = (Get-DrmProp $r 'RecommendationValue' ''); Date = ''; Urgency = (Get-DrmProp $r 'SoftPaqId' '') })
-                }
-            }
-        }
-    } catch { Write-DrmLog ("อ่านรายงานของผู้ผลิตไม่ได้: {0}" -f $_.Exception.Message) -Level Warn }
-    return , $items.ToArray()
+            foreach ($i in $found) { if ($i -and $i.Name -and -not @($items | Where-Object { $_.Name -eq $i.Name -and $_.Version -eq $i.Version }).Count) { $items.Add($i) } }
+            if ($found.Count) { Write-DrmLog ("อ่านรายงาน {0}: {1} รายการ" -f $f.Name, $found.Count) -Level Debug }
+        } catch { Write-DrmLog ("อ่านรายงานของผู้ผลิต {0} ไม่ได้: {1}" -f $f.Name, $_.Exception.Message) -Level Warn }
+    }
+    return $items.ToArray()
+}
+
+function Set-DrmOemPreferences {
+    <# ตั้งค่าก่อนรันเครื่องมือของผู้ผลิต (เช่นปิดหน้าข้อตกลงของ Lenovo System Update — DRM-104) บันทึกค่าเดิมลง log #>
+    param([Parameter(Mandatory)]$Tool)
+    $prefs = @($Tool.Preferences | Where-Object { $_ })
+    if ($prefs.Count -eq 0) { return 0 }
+    if ($script:DrmState.DryRun) { Write-DrmLog ("โหมดทดลอง: จะตั้งค่า {0} รายการก่อนรัน {1}" -f $prefs.Count, $Tool.Name); return 0 }
+    $n = 0
+    foreach ($p in $prefs) {
+        $path = [string]$p.path
+        if ($path -match 'WOW6432Node' -and -not [Environment]::Is64BitOperatingSystem) { continue }
+        try {
+            $before = Get-DrmRegistryValue $path $p.name
+            if ([string]$before -eq [string]$p.value) { continue }
+            Set-DrmRegistryValue -Path $path -Name $p.name -Value ([string]$p.value) -Type String
+            Write-DrmLog ("{0}: {1}\{2} = {3} (เดิม {4})" -f $Tool.Name, $path, $p.name, $p.value, $(if ($null -eq $before) { 'ไม่มี' } else { $before }))
+            $n++
+        } catch { Write-DrmLog ("ตั้งค่า {0}\{1} ไม่ได้: {2}" -f $path, $p.name, $_.Exception.Message) -Level Warn }
+    }
+    return $n
 }
 
 function Invoke-DrmOemTool {
@@ -1376,18 +1597,30 @@ function Invoke-DrmOemTool {
         return [pscustomobject]@{ Status = 'Skipped'; Updates = @(); Detail = ("{0} ไม่มีโหมดสแกนแยก — จะติดตั้งทั้งหมดตอนกดติดตั้ง" -f $Tool.Name); ExitCode = $null; RebootRequired = $false }
     }
     $argLine = Expand-DrmTemplate $tpl @{ ReportDir = $reportDir; LogFile = $logFile; DownloadDir = $downloadDir }
+    [void](Set-DrmOemPreferences -Tool $Tool)
     $r = Invoke-DrmProcess -FilePath $exe -Arguments $argLine -TimeoutMinutes 180 -Capture -WaitForProcessNames $Tool.WaitProcess -IgnoreDryRun:($Mode -eq 'Scan')
     $code = $r.ExitCode
     $reboot = ($null -ne $code -and @($Tool.RebootCodes) -contains [int]$code)
     $noUpdate = ($null -ne $code -and @($Tool.NoUpdateCodes) -contains [int]$code)
     $ok = ($null -ne $code -and @($Tool.SuccessCodes) -contains [int]$code)
+    $unsupported = ($null -ne $code -and @($Tool.UnsupportedCodes) -contains [int]$code)
+    $pending = ($null -ne $code -and @($Tool.PendingRebootCodes) -contains [int]$code)
+    $unsupportedText = ("{0} ไม่รองรับเครื่องรุ่นนี้ (exit {1}) — ตรวจด้วยหน้าเว็บของผู้ผลิตจาก Serial/Service Tag: {2}" -f $Tool.Name, (Format-DrmExitCode $code), $Tool.SupportUrl)
+    $pendingText = ("{0}: มีการรีสตาร์ทค้างจากครั้งก่อน (exit {1}) — รีสตาร์ทเครื่องแล้วกดติดตั้งรายการนี้อีกครั้ง" -f $Tool.Name, (Format-DrmExitCode $code))
     if ($Mode -eq 'Scan') {
-        $updates = Read-DrmOemReport -Kind $Tool.Report -Dir $reportDir
-        $status = if ($noUpdate -or ($ok -and $updates.Count -eq 0)) { 'UpToDate' } elseif ($ok) { 'Found' } else { 'Failed' }
-        return [pscustomobject]@{ Status = $status; Updates = $updates; Detail = ("exit {0}, พบ {1} รายการ" -f (Format-DrmExitCode $code), $updates.Count); ExitCode = $code; RebootRequired = $reboot; LogFile = $logFile }
+        $updates = @(Read-DrmOemReport -Kind $Tool.Report -Dir $reportDir)
+        $status = if ($unsupported) { 'Unsupported' } elseif ($pending) { 'RebootPending' } elseif ($noUpdate -or ($ok -and $updates.Count -eq 0)) { 'UpToDate' } elseif ($ok) { 'Found' } else { 'Failed' }
+        $detail = switch ($status) { 'Unsupported' { $unsupportedText } 'RebootPending' { $pendingText } default { "exit {0}, พบ {1} รายการ" -f (Format-DrmExitCode $code), $updates.Count } }
+        return [pscustomobject]@{ Status = $status; Updates = $updates; Detail = $detail; ExitCode = $code; RebootRequired = ($reboot -or $pending); LogFile = $logFile }
     }
     if ($r.DryRun) { return New-DrmResult -Status 'DryRun' -Detail $r.Command -Method 'oem' }
     if ($r.TimedOut) { return New-DrmResult -Status 'Failed' -Detail 'หมดเวลา — ตรวจ log ของผู้ผลิต' -Method 'oem' }
+    if ($unsupported) {
+        # DRM-105: รุ่นที่เครื่องมืออัตโนมัติไม่รองรับ → ให้ผู้ใช้ทำต่อจากหน้าเว็บของผู้ผลิต (ไม่นับเป็นล้มเหลว)
+        if ($Tool.SupportUrl) { [void](Open-DrmTarget -Target $Tool.SupportUrl) }
+        return New-DrmResult -Status 'Manual' -Detail $unsupportedText -ExitCode $code -Method 'oem'
+    }
+    if ($pending) { return New-DrmResult -Status 'Manual' -Detail $pendingText -ExitCode $code -RebootRequired $true -Method 'oem' }
     if ($noUpdate) { return New-DrmResult -Status 'UpToDate' -Detail ("{0}: ไม่มีอัปเดตใหม่" -f $Tool.Name) -ExitCode $code -Method 'oem' }
     if ($ok) { return New-DrmResult -Status $(if ($reboot) { 'InstalledReboot' } else { 'Installed' }) -Detail ("log: {0}" -f $logFile) -ExitCode $code -RebootRequired $reboot -Method 'oem' }
     return New-DrmResult -Status 'Failed' -Detail ("{0} คืนรหัส {1} — ดู {2}" -f $Tool.Name, (Format-DrmExitCode $code), $logFile) -ExitCode $code -Method 'oem'
@@ -1418,8 +1651,34 @@ $script:ComparisonText = @{
     Unknown = 'เทียบไม่ได้'; NoDevice = 'ไม่พบอุปกรณ์ที่ตรงกันตอนนี้'
 }
 
+function Invoke-DrmWuSearcher {
+    <# DRM-127: ค้นหาแบบ asynchronous พร้อมเวลาหมดและปุ่มหยุด — ถ้า BeginSearch ใช้ไม่ได้ ค่อยใช้ Search แบบรอจนจบ #>
+    param([Parameter(Mandatory)]$Searcher, [Parameter(Mandatory)][string]$Criteria, [int]$TimeoutMinutes = 15)
+    $job = $null
+    try { $job = $Searcher.BeginSearch($Criteria, $null, $null) }
+    catch { Write-DrmLog ("ค้นหาแบบ asynchronous ไม่ได้ ({0}) — ใช้แบบรอจนจบ" -f $_.Exception.Message) -Level Debug }
+    if (-not $job) { return $Searcher.Search($Criteria) }
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    $lastNote = 0
+    while (-not $job.IsCompleted) {
+        if (Test-DrmCancelRequested) { try { $job.RequestAbort() } catch { }; throw 'ผู้ใช้สั่งหยุดระหว่างค้นหา Windows Update' }
+        if ($sw.Elapsed.TotalMinutes -ge $TimeoutMinutes) {
+            try { $job.RequestAbort() } catch { }
+            throw ("ค้นหา Windows Update เกิน {0} นาที — บริการ Windows Update อาจกำลังทำงานอื่นอยู่ ลองใหม่ภายหลัง" -f $TimeoutMinutes)
+        }
+        if ($sw.Elapsed.TotalSeconds - $lastNote -ge 30) { $lastNote = $sw.Elapsed.TotalSeconds; Write-DrmLog ("ยังค้นหา Windows Update อยู่ ({0:N0} วินาที)" -f $sw.Elapsed.TotalSeconds) -Level Debug }
+        Start-Sleep -Milliseconds 500
+    }
+    try { return $Searcher.EndSearch($job) }
+    catch {
+        # ผลของงาน asynchronous อ่านไม่ได้ (บางรุ่นของ Windows) → ค้นหาแบบรอจนจบหนึ่งครั้ง
+        Write-DrmLog ("อ่านผลการค้นหาแบบ asynchronous ไม่ได้ ({0}) — ค้นหาใหม่แบบรอจนจบ" -f $_.Exception.Message) -Level Debug
+        return $Searcher.Search($Criteria)
+    }
+}
+
 function Get-DrmWuSearch {
-    param([switch]$Refresh)
+    param([switch]$Refresh, [int]$TimeoutMinutes = 15)
     if (-not $Refresh -and $script:DrmState.WuCache) { return $script:DrmState.WuCache }
     Write-DrmLog 'ค้นหาไดรเวอร์จาก Windows Update (เซิร์ฟเวอร์ของ Microsoft)...' -Level Step
     $session = New-Object -ComObject Microsoft.Update.Session
@@ -1427,9 +1686,40 @@ function Get-DrmWuSearch {
     $searcher = $session.CreateUpdateSearcher()
     $searcher.ServerSelection = 2   # ssWindowsUpdate
     $searcher.Online = $true
-    $result = $searcher.Search("IsInstalled=0 and Type='Driver' and IsHidden=0")
-    $script:DrmState.WuCache = @{ Session = $session; Result = $result; Time = (Get-Date) }
+    $server = 'Windows Update'
+    $criteria = "IsInstalled=0 and Type='Driver' and IsHidden=0"
+    try { $result = Invoke-DrmWuSearcher -Searcher $searcher -Criteria $criteria -TimeoutMinutes $TimeoutMinutes }
+    catch {
+        if ((Test-DrmCancelRequested) -or $_.Exception.Message -match 'เกิน \d+ นาที') { throw }
+        # DRM-114: เครื่องที่ใช้ WSUS/นโยบายองค์กรอาจห้ามค้นออนไลน์ (เช่น 0x8024002E) → ใช้เซิร์ฟเวอร์ที่องค์กรกำหนด
+        Write-DrmLog ("ค้นหา Windows Update ออนไลน์ไม่ได้ ({0}) — ลองเซิร์ฟเวอร์ที่องค์กรกำหนด (WSUS)" -f $_.Exception.Message) -Level Warn
+        $searcher = $session.CreateUpdateSearcher()
+        $searcher.ServerSelection = 0   # ssDefault
+        $result = Invoke-DrmWuSearcher -Searcher $searcher -Criteria $criteria -TimeoutMinutes $TimeoutMinutes
+        $server = 'เซิร์ฟเวอร์ขององค์กร (WSUS)'
+    }
+    $script:DrmState.WuCache = @{ Session = $session; Result = $result; Time = (Get-Date); Server = $server }
     return $script:DrmState.WuCache
+}
+
+function Hide-DrmWindowsUpdateDriver {
+    <# DRM-114: ซ่อน (หรือเลิกซ่อน) ไดรเวอร์ที่ Windows Update เสนอ เพื่อไม่ให้ติดตั้งอัตโนมัติ/ไม่แสดงอีก — ต้องเป็น Administrator #>
+    param([Parameter(Mandatory)][string]$UpdateId, [bool]$Hidden = $true)
+    if ($UpdateId -notmatch '^\{?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\}?$') { throw ("UpdateID ไม่ถูกต้อง: {0}" -f $UpdateId) }
+    $verb = if ($Hidden) { 'ซ่อน' } else { 'เลิกซ่อน' }
+    if ($script:DrmState.DryRun) { return New-DrmResult -Status 'DryRun' -Detail ("จะ{0} Windows Update {1}" -f $verb, $UpdateId) -Method 'windowsupdate' }
+    $u = $null
+    if ($script:DrmState.WuCache) { foreach ($x in $script:DrmState.WuCache.Result.Updates) { if ($x.Identity.UpdateID -eq $UpdateId) { $u = $x; break } } }
+    if (-not $u) {
+        $wuSession = New-Object -ComObject Microsoft.Update.Session
+        $searcher = $wuSession.CreateUpdateSearcher()
+        $res = $searcher.Search(("UpdateID='{0}'" -f $UpdateId.Trim('{', '}')))
+        if ($res.Updates.Count -gt 0) { $u = $res.Updates.Item(0) }
+    }
+    if (-not $u) { return New-DrmResult -Status 'NotOffered' -Detail 'ไม่พบรายการนี้ใน Windows Update แล้ว' -Method 'windowsupdate' }
+    $u.IsHidden = $Hidden
+    Write-DrmLog ("{0}ไดรเวอร์จาก Windows Update: {1} ({2})" -f $verb, $u.Title, $UpdateId) -Level Ok
+    return New-DrmResult -Status $(if ($Hidden) { 'Hidden' } else { 'Installed' }) -Detail ([string]$u.Title) -Method 'windowsupdate'
 }
 
 function Find-DrmWindowsUpdateDrivers {
@@ -1440,7 +1730,7 @@ function Find-DrmWindowsUpdateDrivers {
     try { $wu = Get-DrmWuSearch -Refresh }
     catch {
         Write-DrmLog ("ค้นหา Windows Update ไม่สำเร็จ: {0}" -f $_.Exception.Message) -Level Error
-        return , $out.ToArray()
+        return $out.ToArray()
     }
     # จับคู่ด้วย Hardware ID ก่อน แล้วจึงใช้ Compatible ID (แบบเดียวกับที่ PnP จัดอันดับ)
     $index = @{}
@@ -1484,7 +1774,7 @@ function Find-DrmWindowsUpdateDrivers {
     }
     Write-DrmLog ("Windows Update เสนอไดรเวอร์ {0} รายการ" -f $out.Count) -Level Ok
     $sorted = @($out.ToArray() | Sort-Object OrderIndex, Title)
-    return , $sorted
+    return $sorted
 }
 
 function Install-DrmWindowsUpdateDriver {
@@ -1497,12 +1787,14 @@ function Install-DrmWindowsUpdateDriver {
     try { if (-not $u.EulaAccepted) { $u.AcceptEula() } } catch { }
     $col = New-Object -ComObject Microsoft.Update.UpdateColl
     [void]$col.Add($u)
-    Set-DrmItemStatus -Id $ItemId -Status 'Downloading'
+    Set-DrmItemStatus -Id $ItemId -Status 'Downloading' -Detail 'ดาวน์โหลดผ่าน Windows Update'
     $dl = $wu.Session.CreateUpdateDownloader()
     $dl.Updates = $col
     $dr = $dl.Download()
     if (@(2, 3) -notcontains [int]$dr.ResultCode) { return New-DrmResult -Status 'Failed' -Detail ("ดาวน์โหลดไม่สำเร็จ (ResultCode {0}, HResult 0x{1:X8})" -f $dr.ResultCode, ($dr.HResult -band 0xFFFFFFFFL)) -Method 'windowsupdate' }
-    Set-DrmItemStatus -Id $ItemId -Status 'Installing'
+    # DRM-118: Windows Update ติดตั้งไดรเวอร์เป็นงานเดียวที่หยุดกลางคันไม่ได้ — ปุ่มหยุดจะมีผลหลังรายการนี้
+    Set-DrmItemStatus -Id $ItemId -Status 'Installing' -Detail 'กำลังรอ Windows Update ติดตั้งให้จบ (กดหยุดได้ จะหยุดหลังรายการนี้เพื่อไม่ให้ไดรเวอร์ติดตั้งครึ่งเดียว)'
+    if (Test-DrmCancelRequested) { return New-DrmResult -Status 'Cancelled' -Detail 'หยุดก่อนเริ่มติดตั้ง' -Method 'windowsupdate' }
     $attempt = 0
     while ($true) {
         $attempt++
@@ -1529,12 +1821,53 @@ function Install-DrmWindowsUpdateDriver {
 # ---------------------------------------------------------------------------
 # รันไทม์และโปรแกรมเสริม
 # ---------------------------------------------------------------------------
+function Get-DrmInteractiveUserSid {
+    <# SID ของผู้ใช้ที่ล็อกอินอยู่ในเซสชันเดียวกัน (เจ้าของ explorer.exe) — ใช้เมื่อยกระดับสิทธิ์ด้วยบัญชี Admin อื่น (DRM-109) #>
+    if ($script:DrmState.ContainsKey('InteractiveSid')) { return $script:DrmState.InteractiveSid }
+    $sid = $null
+    if (Test-DrmIsWindows) {
+        try {
+            $mySession = (Get-Process -Id $PID).SessionId
+            $procs = @(Get-CimInstance -ClassName Win32_Process -Filter "Name='explorer.exe'" -ErrorAction Stop)
+            $ordered = @($procs | Where-Object { $_.SessionId -eq $mySession }) + @($procs | Where-Object { $_.SessionId -ne $mySession })
+            foreach ($p in $ordered) {
+                $o = Invoke-CimMethod -InputObject $p -MethodName GetOwnerSid -ErrorAction Stop
+                if ($o.ReturnValue -eq 0 -and $o.Sid) { $sid = [string]$o.Sid; break }
+            }
+        } catch { Write-DrmLog ("หาเจ้าของ explorer.exe ไม่ได้: {0}" -f $_.Exception.Message) -Level Debug }
+    }
+    $script:DrmState.InteractiveSid = $sid
+    return $sid
+}
+
+function Resolve-DrmUserHivePath {
+    <# ตัดสินว่าจะใช้ HKCU หรือ HKEY_USERS\<SID> (ฟังก์ชันบริสุทธิ์ ทดสอบได้ทุกแพลตฟอร์ม) #>
+    param([Parameter(Mandatory)][string]$SubKey, [string]$InteractiveSid, [string]$CurrentSid, [bool]$HiveLoaded)
+    $sub = $SubKey.Trim('\')
+    if ($InteractiveSid -and $InteractiveSid -ne $CurrentSid -and $HiveLoaded) { return ('Registry::HKEY_USERS\{0}\{1}' -f $InteractiveSid, $sub) }
+    return ('HKCU:\{0}' -f $sub)
+}
+
+function Get-DrmUserRegistryPath {
+    param([Parameter(Mandatory)][string]$SubKey)
+    $sid = Get-DrmInteractiveUserSid
+    $current = ''
+    $loaded = $false
+    if ($sid) {
+        try { $current = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value } catch { }
+        if ($sid -ne $current) { $loaded = Test-Path -LiteralPath ('Registry::HKEY_USERS\{0}' -f $sid) }
+    }
+    return Resolve-DrmUserHivePath -SubKey $SubKey -InteractiveSid $sid -CurrentSid $current -HiveLoaded $loaded
+}
+
 function Get-DrmUninstallEntries {
     param([switch]$Refresh)
     if (-not $Refresh -and $script:DrmState.UninstallCache) { return $script:DrmState.UninstallCache }
-    $paths = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
-    'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    $paths = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*')
+    $userUninstall = Get-DrmUserRegistryPath -SubKey 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
+    if ($userUninstall -notlike 'HKCU:*') { $paths += ($userUninstall + '\*') }
     $list = New-Object System.Collections.Generic.List[object]
     foreach ($p in $paths) {
         foreach ($e in @(Get-ItemProperty -Path $p -ErrorAction SilentlyContinue)) {
@@ -1551,7 +1884,7 @@ function Get-DrmTweakState {
     try {
         switch ($Name) {
             'GameMode' {
-                $v = Get-DrmRegistryValue 'HKCU:\Software\Microsoft\GameBar' 'AutoGameModeEnabled'
+                $v = Get-DrmRegistryValue (Get-DrmUserRegistryPath -SubKey 'Software\Microsoft\GameBar') 'AutoGameModeEnabled'
                 return ($null -eq $v -or [int]$v -eq 1)
             }
             'HAGS' { return ([int](Get-DrmRegistryValue 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' 'HwSchMode') -eq 2) }
@@ -1575,15 +1908,56 @@ function Get-DrmDotnetChannels {
             foreach ($r in @($idx.'releases-index')) {
                 $major = [int](([string]$r.'channel-version').Split('.')[0])
                 if ($major -lt [int]$cfg.minimumMajor) { continue }
-                $channels += [pscustomobject]@{ Channel = [string]$r.'channel-version'; Major = $major; Latest = [string]$r.'latest-runtime'; SupportPhase = [string]$r.'support-phase'; ReleaseType = [string]$r.'release-type'; EolDate = [string](Get-DrmProp $r 'eol-date' '') }
+                $channels += [pscustomobject]@{ Channel = [string]$r.'channel-version'; Major = $major; Latest = [string]$r.'latest-runtime'; LatestRelease = [string](Get-DrmProp $r 'latest-release' ''); SupportPhase = [string]$r.'support-phase'; ReleaseType = [string]$r.'release-type'; EolDate = [string](Get-DrmProp $r 'eol-date' ''); ReleasesJson = [string](Get-DrmProp $r 'releases.json' '') }
             }
         } catch { Write-DrmLog ("อ่าน .NET release metadata ไม่ได้ ({0}) — ใช้ค่าสำรองในแคตตาล็อก" -f $_.Exception.Message) -Level Warn }
     }
     if ($channels.Count -eq 0) {
-        foreach ($f in @($cfg.fallbackChannels)) { $channels += [pscustomobject]@{ Channel = $f.channel; Major = [int]($f.channel.Split('.')[0]); Latest = ''; SupportPhase = $f.supportPhase; ReleaseType = [string](Get-DrmProp $f 'releaseType' ''); EolDate = '' } }
+        foreach ($f in @($cfg.fallbackChannels)) { $channels += [pscustomobject]@{ Channel = $f.channel; Major = [int]($f.channel.Split('.')[0]); Latest = ''; LatestRelease = ''; SupportPhase = $f.supportPhase; ReleaseType = [string](Get-DrmProp $f 'releaseType' ''); EolDate = ''; ReleasesJson = '' } }
     }
     $script:DrmState.DotnetIndex = $channels
     return $channels
+}
+
+function Select-DrmDotnetFile {
+    <# DRM-107: เลือกไฟล์ตัวติดตั้ง Windows Desktop Runtime จาก releases.json ของช่อง (ฟังก์ชันบริสุทธิ์)
+       คืน Version/Url/Sha512 ของรุ่นที่ runtime ตรงกับ $Version (หรือรุ่นล่าสุดที่มีไฟล์ถ้าไม่ระบุ) #>
+    param([Parameter(Mandatory)]$Releases, [Parameter(Mandatory)][string]$Arch, [string]$Version)
+    $rid = 'win-' + $Arch.ToLowerInvariant()
+    $candidates = @($Releases.releases | Where-Object { $_ -and $_.windowsdesktop -and $_.windowsdesktop.files })
+    if ($Version) {
+        $exact = @($candidates | Where-Object { [string]$_.runtime.version -eq $Version -or [string]$_.windowsdesktop.version -eq $Version -or [string]$_.'release-version' -eq $Version })
+        if ($exact.Count -eq 0) { return $null }
+        $candidates = $exact
+    }
+    foreach ($rel in $candidates) {
+        $file = @($rel.windowsdesktop.files | Where-Object { [string]$_.rid -eq $rid -and [string]$_.name -like '*.exe' -and [string]$_.url -like 'https://*' -and [string]$_.hash -match '^[0-9a-fA-F]{128}$' }) | Select-Object -First 1
+        if ($file) {
+            return [pscustomobject]@{ Version = [string]$rel.windowsdesktop.version; ReleaseVersion = [string]$rel.'release-version'; Url = [string]$file.url; Sha512 = ([string]$file.hash).ToUpperInvariant(); Name = [string]$file.name }
+        }
+    }
+    return $null
+}
+
+function Resolve-DrmDotnetDownload {
+    <# URL + SHA512 จาก release metadata ของ Microsoft; ถ้าอ่านไม่ได้ใช้แม่แบบ URL และตรวจลายเซ็นอย่างเดียว #>
+    param([Parameter(Mandatory)]$Method, $Catalog)
+    if (-not $Catalog) { $Catalog = Get-DrmCatalogCached }
+    $ver = [string]$Method.version
+    $fallback = [pscustomobject]@{ Version = $ver; Url = $Catalog.dotnet.downloadUrlTemplate.Replace('{version}', $ver).Replace('{arch}', [string]$Method.arch); Sha512 = ''; Source = 'template' }
+    $rj = [string](Get-DrmProp $Method 'releasesJson' '')
+    if (-not $rj) { return $fallback }
+    try {
+        $rel = Get-DrmJson -Url $rj -TimeoutMs 60000
+        $f = Select-DrmDotnetFile -Releases $rel -Arch $Method.arch -Version $ver
+        if (-not $f) { Write-DrmLog ("releases.json ไม่มีไฟล์ {0} สำหรับ win-{1} — ใช้แม่แบบ URL" -f $ver, $Method.arch) -Level Warn; return $fallback }
+        $urlHost = ([Uri]$f.Url).Host
+        if (@($Catalog.trustedRuntimeHosts) -notcontains $urlHost) { Write-DrmLog ("โฮสต์ {0} ไม่อยู่ใน trustedRuntimeHosts — ใช้แม่แบบ URL" -f $urlHost) -Level Warn; return $fallback }
+        return [pscustomobject]@{ Version = $f.Version; Url = $f.Url; Sha512 = $f.Sha512; Source = 'releases.json' }
+    } catch {
+        Write-DrmLog ("อ่าน {0} ไม่ได้ ({1}) — ใช้แม่แบบ URL และตรวจลายเซ็นอย่างเดียว" -f $rj, $_.Exception.Message) -Level Warn
+        return $fallback
+    }
 }
 
 function Get-DrmDotnetInstalled {
@@ -1632,7 +2006,7 @@ function Expand-DrmDotnetItems {
                 note           = $(if ($isSupported) { $Entry.note } else { "รุ่นนี้หมดการสนับสนุนแล้ว ($($ch.EolDate)) — ติดตั้ง/อัปเดตเฉพาะเมื่อโปรแกรมต้องใช้" })
                 detectedVersion = $installed
                 install        = @(
-                    [pscustomobject]@{ type = 'dotnet'; channel = $ch.Channel; version = $ch.Latest; arch = $a; framework = $Entry.framework },
+                    [pscustomobject]@{ type = 'dotnet'; channel = $ch.Channel; version = $ch.Latest; arch = $a; framework = $Entry.framework; releasesJson = $ch.ReleasesJson },
                     [pscustomobject]@{ type = 'winget'; id = $wingetId; architecture = $a }
                 )
             }
@@ -1765,7 +2139,7 @@ function Get-DrmRuntimeItems {
         }
     }
     $sorted = @($out.ToArray() | Sort-Object Order)
-    return , $sorted
+    return $sorted
 }
 
 function Get-DrmMethodSummary {
@@ -1783,8 +2157,17 @@ function Get-DrmMethodSummary {
     return ($parts -join ' → ')
 }
 
+function Test-DrmWingetSourceError {
+    <# DRM-108: รหัส winget ที่มักหายเมื่ออัปเดตแหล่งข้อมูล (ดัชนีเก่า/เสีย, เปิดแหล่งไม่ได้, manifest เก่ากว่าไฟล์) #>
+    param($Code, [string]$Text = '')
+    if ($null -eq $Code) { return $false }
+    $u = ([int64]$Code) -band 0xFFFFFFFFL
+    if ($u -in 0x8A15000AL, 0x8A15000FL, 0x8A150011L, 0x8A150014L, 0x8A15003FL, 0x8A150045L, 0x8A15004BL) { return $true }
+    return ($u -ne 0 -and $Text -match '(?i)failed (when )?(opening|to open) (the )?source|source.*(corrupt|update)')
+}
+
 function Install-DrmWingetPackage {
-    param([Parameter(Mandatory)][string]$Id, [switch]$Upgrade, [string]$Architecture, [string]$ItemId)
+    param([Parameter(Mandatory)][string]$Id, [switch]$Upgrade, [string]$Architecture, [string]$ItemId, [switch]$NoSourceRetry)
     $wg = Get-DrmWingetPath
     $verb = if ($Upgrade) { 'upgrade' } else { 'install' }
     if ($script:DrmState.DryRun) {
@@ -1807,7 +2190,20 @@ function Install-DrmWingetPackage {
     if ($u -in 0x8A150109, 0x8A15010A) { return New-DrmResult -Status 'InstalledReboot' -ExitCode $code -RebootRequired $true -Method "winget $verb" }
     if ($Upgrade -and $u -eq 0x8A150014) {
         Write-DrmLog 'winget ไม่พบแพ็กเกจที่ติดตั้งไว้ — สลับเป็น install' -Level Debug
-        return Install-DrmWingetPackage -Id $Id -Architecture $Architecture -ItemId $ItemId
+        return Install-DrmWingetPackage -Id $Id -Architecture $Architecture -ItemId $ItemId -NoSourceRetry:$NoSourceRetry
+    }
+    if (-not $NoSourceRetry -and (Test-DrmWingetSourceError -Code $code -Text $text)) {
+        # ลองอัปเดตแหล่งข้อมูลหนึ่งครั้งต่อเซสชัน แล้วติดตั้งใหม่ (บันทึกผลทั้งสองรอบ)
+        Write-DrmLog ("winget คืน {0} ซึ่งมักเกิดจากแหล่งข้อมูลเก่า/เสีย — รัน winget source update แล้วลองใหม่" -f (Format-DrmExitCode $code)) -Level Warn
+        if (-not $script:DrmState.WingetSourceUpdated) {
+            Set-DrmItemStatus -Id $ItemId -Status 'Running' -Detail 'อัปเดตแหล่งข้อมูล winget'
+            $su = Invoke-DrmProcess -FilePath $wg -Arguments 'source update --name winget --disable-interactivity' -Capture -TimeoutMinutes 10
+            $script:DrmState.WingetSourceUpdated = $true
+            Write-DrmLog ("winget source update: exit {0}" -f (Format-DrmExitCode $su.ExitCode)) -Level $(if ($su.ExitCode -eq 0) { 'Ok' } else { 'Warn' })
+        }
+        $again = Install-DrmWingetPackage -Id $Id -Upgrade:$Upgrade -Architecture $Architecture -ItemId $ItemId -NoSourceRetry
+        if ($again.Status -eq 'Failed') { $again.Detail = ('{0} (ลองหลัง winget source update แล้ว)' -f $again.Detail) }
+        return $again
     }
     $lastLine = (($r.Output -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -Last 1)
     return New-DrmResult -Status 'Failed' -Detail ("winget คืนรหัส {0} {1}" -f (Format-DrmExitCode $code), $lastLine) -ExitCode $code -Method "winget $verb"
@@ -1826,27 +2222,30 @@ function Resolve-DrmExitStatus {
 }
 
 function Invoke-DrmBuiltinAction {
-    param([string]$Action, [string]$ItemId)
+    param([string]$Action)
     if ($script:DrmState.DryRun) { return New-DrmResult -Status 'DryRun' -Detail ("จะตั้งค่า {0}" -f $Action) -Method 'builtin' }
     switch ($Action) {
         'RepairWinget' {
             if (Get-DrmWingetPath) { return New-DrmResult -Status 'UpToDate' -Detail 'มี winget แล้ว' -Method 'builtin' }
+            $why = ''
             try {
                 $cmd = "Add-AppxPackage -RegisterByFamilyName -MainPackage Microsoft.DesktopAppInstaller_8wekyb3d8bbwe -ErrorAction Stop"
                 $r = Invoke-DrmProcess -FilePath 'powershell.exe' -Arguments ('-NoProfile -ExecutionPolicy Bypass -Command "{0}"' -f $cmd) -Capture -TimeoutMinutes 10
                 $script:DrmState.WingetPath = $null
                 Start-Sleep -Seconds 3
                 if (Get-DrmWingetPath) { return New-DrmResult -Status 'Installed' -Detail 'ลงทะเบียน App Installer (winget) ใหม่สำเร็จ' -Method 'builtin' }
-            } catch { }
-            return New-DrmResult -Status 'Failed' -Detail 'ลงทะเบียน App Installer ไม่สำเร็จ — จะลองดาวน์โหลดจาก Microsoft' -Method 'builtin'
+                $why = ' (exit {0})' -f (Format-DrmExitCode $r.ExitCode)
+            } catch { $why = ' ({0})' -f $_.Exception.Message }
+            return New-DrmResult -Status 'Failed' -Detail ('ลงทะเบียน App Installer ไม่สำเร็จ{0} — จะลองดาวน์โหลดจาก Microsoft' -f $why) -Method 'builtin'
         }
         'GameMode' {
-            $k = 'HKCU:\Software\Microsoft\GameBar'
+            # DRM-109: เขียนลงโปรไฟล์ของผู้ใช้ที่ล็อกอินอยู่ (เจ้าของ explorer.exe) ไม่ใช่บัญชี Admin ที่ใช้ยกระดับสิทธิ์
+            $k = Get-DrmUserRegistryPath -SubKey 'Software\Microsoft\GameBar'
             $before = Get-DrmRegistryValue $k 'AutoGameModeEnabled'
-            New-Item -Path $k -Force | Out-Null
-            Set-ItemProperty -Path $k -Name 'AutoGameModeEnabled' -Value 1 -Type DWord
-            Set-ItemProperty -Path $k -Name 'AllowAutoGameMode' -Value 1 -Type DWord
-            Write-DrmLog ("Game Mode: ค่าเดิม AutoGameModeEnabled={0} → 1" -f $before)
+            if (-not (Test-Path -LiteralPath $k)) { New-Item -Path $k -Force | Out-Null }
+            Set-ItemProperty -LiteralPath $k -Name 'AutoGameModeEnabled' -Value 1 -Type DWord
+            Set-ItemProperty -LiteralPath $k -Name 'AllowAutoGameMode' -Value 1 -Type DWord
+            Write-DrmLog ("Game Mode: {0} ค่าเดิม AutoGameModeEnabled={1} → 1" -f $k, $before)
             return New-DrmResult -Status 'Installed' -Detail 'เปิด Game Mode แล้ว' -Method 'builtin'
         }
         'HAGS' {
@@ -1888,7 +2287,7 @@ function Install-DrmCatalogItem {
         try {
             $r = $null
             switch ($m.type) {
-                'builtin' { $r = Invoke-DrmBuiltinAction -Action $m.action -ItemId $ItemId }
+                'builtin' { $r = Invoke-DrmBuiltinAction -Action $m.action }
                 'winget' {
                     $arch = [string](Get-DrmProp $m 'architecture' '')
                     $r = Install-DrmWingetPackage -Id $m.id -Upgrade:([bool]$det.Installed) -Architecture $arch -ItemId $ItemId
@@ -1906,10 +2305,18 @@ function Install-DrmCatalogItem {
                     $ver = [string]$m.version
                     if (-not $ver) { throw 'ไม่ทราบเวอร์ชันล่าสุดของ .NET (ออฟไลน์) — ลองวิธีถัดไป' }
                     if ($det.Installed -and (Compare-DrmVersion $det.Version $ver) -ge 0) { $r = New-DrmResult -Status 'UpToDate' -Version $det.Version; break }
-                    $url = (Get-DrmCatalogCached).dotnet.downloadUrlTemplate.Replace('{version}', $ver).Replace('{arch}', $m.arch)
-                    if ($script:DrmState.DryRun) { $r = New-DrmResult -Status 'DryRun' -Detail ("จะดาวน์โหลด {0}" -f $url); break }
+                    if ($script:DrmState.DryRun) {
+                        $url = (Get-DrmCatalogCached).dotnet.downloadUrlTemplate.Replace('{version}', $ver).Replace('{arch}', $m.arch)
+                        $r = New-DrmResult -Status 'DryRun' -Detail ("จะดาวน์โหลด {0} (ตรวจ SHA512 จาก releases.json + ลายเซ็น)" -f $url); break
+                    }
+                    $dl = Resolve-DrmDotnetDownload -Method $m
+                    if ($dl.Version -and $dl.Version -ne $ver) {
+                        Write-DrmLog ("Windows Desktop Runtime รุ่นจริงคือ {0} (runtime {1})" -f $dl.Version, $ver)
+                        if ($det.Installed -and (Compare-DrmVersion $det.Version $dl.Version) -ge 0) { $r = New-DrmResult -Status 'UpToDate' -Version $det.Version; break }
+                        $ver = $dl.Version
+                    }
                     Set-DrmItemStatus -Id $ItemId -Status 'Downloading'
-                    $file = Save-DrmDownload -Url $url -DestinationDir (Join-Path $session.WorkDir 'runtimes') -ExpectedSigner 'Microsoft Corporation' -ItemId $ItemId
+                    $file = Save-DrmDownload -Url $dl.Url -DestinationDir (Join-Path $session.WorkDir 'runtimes') -Sha512 $dl.Sha512 -ExpectedSigner 'Microsoft Corporation' -ItemId $ItemId
                     Set-DrmItemStatus -Id $ItemId -Status 'Installing'
                     $p = Invoke-DrmProcess -FilePath $file -Arguments '/install /quiet /norestart' -TimeoutMinutes 30
                     $r = New-DrmResult -Status (Resolve-DrmExitStatus $p.ExitCode -SuccessCodes $Item.SuccessCodes) -ExitCode $p.ExitCode -RebootRequired (@(3010, 1641) -contains [int]$p.ExitCode) -Method 'dotnet' -Version $ver
@@ -1962,6 +2369,7 @@ $script:KindByExtension = @{
     '.inf' = 'Inf'; '.exe' = 'Exe'; '.msi' = 'Msi'; '.msp' = 'Msp'; '.msu' = 'Msu'; '.cab' = 'Cab'
     '.msix' = 'Appx'; '.msixbundle' = 'Appx'; '.appx' = 'Appx'; '.appxbundle' = 'Appx'; '.appinstaller' = 'Appx'
     '.zip' = 'Archive'; '.7z' = 'Archive'; '.rar' = 'Archive'; '.tar' = 'Archive'; '.gz' = 'Archive'; '.tgz' = 'Archive'; '.xz' = 'Archive'; '.bz2' = 'Archive'
+    '.001' = 'Archive'
     '.iso' = 'Image'; '.img' = 'Image'; '.vhd' = 'Image'; '.vhdx' = 'Image'
     '.bat' = 'Script'; '.cmd' = 'Script'; '.ps1' = 'PowerShell'; '.reg' = 'Registry'; '.ppkg' = 'Provisioning'
 }
@@ -1976,8 +2384,17 @@ $script:EngineArgs = @{
     SevenZipSfx = ''; RarSfx = ''; Unknown = ''
 }
 
+function Test-DrmArchiveSecondaryPart {
+    <# DRM-116: ส่วนที่ 2 เป็นต้นไปของไฟล์บีบอัดแบบแยกหลายไฟล์ (.002, .part2.rar, .z01, .r00) — ไม่ต้องติดตั้งแยก 7-Zip อ่านต่อจากส่วนแรกเอง #>
+    param([string]$Name)
+    $n = [IO.Path]::GetFileName($Name).ToLowerInvariant()
+    if ($n -match '\.part0*1\.rar$') { return $false }
+    return ($n -match '\.(00[2-9]|0[1-9]\d|[1-9]\d\d)$' -or $n -match '\.part\d+\.rar$' -or $n -match '\.z\d\d$' -or $n -match '\.r\d\d$')
+}
+
 function Get-DrmInstallerKind {
     param([string]$Path)
+    if (Test-DrmArchiveSecondaryPart $Path) { return 'Unknown' }
     $ext = [IO.Path]::GetExtension($Path).ToLowerInvariant()
     if ($script:KindByExtension.ContainsKey($ext)) { return $script:KindByExtension[$ext] }
     return 'Unknown'
@@ -2070,7 +2487,7 @@ function Get-DrmInstallerInfo {
     param([Parameter(Mandatory)][string]$Path, $Catalog)
     if (-not $Catalog) { $Catalog = Get-DrmCatalogCached }
     $results = New-Object System.Collections.Generic.List[object]
-    if (-not (Test-Path -LiteralPath $Path)) { return , $results.ToArray() }
+    if (-not (Test-Path -LiteralPath $Path)) { return $results.ToArray() }
     $item = Get-Item -LiteralPath $Path
     if ($item.PSIsContainer) {
         $infs = @(Get-ChildItem -LiteralPath $item.FullName -Filter '*.inf' -Recurse -File -ErrorAction SilentlyContinue)
@@ -2079,12 +2496,12 @@ function Get-DrmInstallerInfo {
             $ord = Get-DrmDriverOrder -Class $first.Class -Name ($item.Name + ' ' + $first.Provider)
             $cert = if ($first.CatalogFile) { Get-DrmFileSignature -Path $first.CatalogFile } else { $null }
             $results.Add((New-DrmLocalInfo -Path $item.FullName -Kind 'InfFolder' -Name $item.Name -Engine ("{0} ไฟล์ .inf" -f $infs.Count) -SilentArgs '' -Signature $cert -ClassName $first.Class -Version $first.Version -Order $ord))
-            return , $results.ToArray()
+            return $results.ToArray()
         }
         foreach ($child in Get-ChildItem -LiteralPath $item.FullName -File -ErrorAction SilentlyContinue) {
             if ((Get-DrmInstallerKind $child.FullName) -ne 'Unknown') { foreach ($x in (Get-DrmInstallerInfo -Path $child.FullName -Catalog $Catalog)) { $results.Add($x) } }
         }
-        return , $results.ToArray()
+        return $results.ToArray()
     }
     $kind = Get-DrmInstallerKind $item.FullName
     $engine = ''; $silentArgs = ''; $sig = $null; $class = ''; $ver = ''; $rule = $null; $meta = ''
@@ -2127,7 +2544,7 @@ function Get-DrmInstallerInfo {
         $info.NotApplicableCodes = @(Get-DrmProp $rule 'notApplicableCodes' @())
     }
     $results.Add($info)
-    return , $results.ToArray()
+    return $results.ToArray()
 }
 
 function New-DrmLocalInfo {
@@ -2161,28 +2578,48 @@ function New-DrmLocalInfo {
     }
 }
 
+function Get-Drm7ZipArguments {
+    <# อาร์กิวเมนต์ของ 7-Zip: ใส่รหัสผ่านเสมอ (ค่าหลอกเมื่อไม่ได้ระบุ) เพื่อไม่ให้ 7-Zip ค้างรอพิมพ์รหัสผ่าน (DRM-116) #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'Password', Justification = 'รหัสผ่านไฟล์บีบอัดมาจากช่องข้อความในตาราง และต้องส่งให้ 7-Zip ทางบรรทัดคำสั่ง — ปิดบังใน log ด้วย -Secret')]
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Destination, [string]$Password)
+    if ($Password -match '"') { throw 'รหัสผ่านที่มีเครื่องหมาย " ใช้ไม่ได้ — แตกไฟล์เองแล้วเพิ่มโฟลเดอร์แทน' }
+    $pw = if ($Password) { $Password } else { 'DRM-NO-PASSWORD' }
+    return ('x "{0}" -o"{1}" -y -p"{2}"' -f $Path, $Destination, $pw)
+}
+
+function Test-DrmArchivePasswordError {
+    param([string]$Text)
+    return ($Text -match '(?i)wrong password|can not open encrypted archive|cannot open encrypted|data error in encrypted file|headers error.*encrypted')
+}
+
 function Expand-DrmArchive {
-    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Destination)
+    <# คืน @{ Ok; Reason } — Reason = 'Password' เมื่อไฟล์มีรหัสผ่านแต่ไม่ได้ใส่/ใส่ผิด, 'Needs7Zip' เมื่อเป็นไฟล์แยกหลายส่วนหรือรูปแบบที่ต้องใช้ 7-Zip #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'Password', Justification = 'ดู Get-Drm7ZipArguments')]
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Destination, [string]$Password)
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+    $name = [IO.Path]::GetFileName($Path).ToLowerInvariant()
     $ext = [IO.Path]::GetExtension($Path).ToLowerInvariant()
-    if ($ext -eq '.zip') {
+    $multi = ($ext -eq '.001' -or $name -match '\.part0*1\.rar$')
+    if ($ext -eq '.zip' -and -not $Password) {
         try {
             Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
             [IO.Compression.ZipFile]::ExtractToDirectory($Path, $Destination)
-            return $true
+            return [pscustomobject]@{ Ok = $true; Reason = '' }
         } catch { Write-DrmLog ("แตก zip ด้วย .NET ไม่ได้ ({0}) — ลองเครื่องมืออื่น" -f $_.Exception.Message) -Level Debug }
     }
     $7z = Get-Drm7ZipPath
     if ($7z) {
-        $r = Invoke-DrmProcess -FilePath $7z -Arguments ('x "{0}" -o"{1}" -y' -f $Path, $Destination) -Capture -IgnoreDryRun -TimeoutMinutes 30
-        if ($r.ExitCode -in 0, 1) { return $true }
+        $r = Invoke-DrmProcess -FilePath $7z -Arguments (Get-Drm7ZipArguments -Path $Path -Destination $Destination -Password $Password) -Capture -IgnoreDryRun -TimeoutMinutes 30 -Secret $Password
+        if ($r.ExitCode -in 0, 1) { return [pscustomobject]@{ Ok = $true; Reason = '' } }
+        if (Test-DrmArchivePasswordError ($r.Output + ' ' + $r.Error)) { return [pscustomobject]@{ Ok = $false; Reason = 'Password' } }
     }
+    elseif ($multi -or $Password) { return [pscustomobject]@{ Ok = $false; Reason = 'Needs7Zip' } }
     $tar = ('{0}\System32\tar.exe' -f (Get-DrmWindowsDir))
-    if (Test-Path -LiteralPath $tar) {
+    if (-not $multi -and -not $Password -and (Test-Path -LiteralPath $tar)) {
         $r = Invoke-DrmProcess -FilePath $tar -Arguments ('-xf "{0}" -C "{1}"' -f $Path, $Destination) -Capture -IgnoreDryRun -TimeoutMinutes 30
-        if ($r.ExitCode -eq 0) { return $true }
+        if ($r.ExitCode -eq 0) { return [pscustomobject]@{ Ok = $true; Reason = '' } }
     }
-    return $false
+    return [pscustomobject]@{ Ok = $false; Reason = $(if ($7z) { 'Failed' } else { 'Needs7Zip' }) }
 }
 
 function Resolve-DrmExtractedInstaller {
@@ -2233,7 +2670,13 @@ function Install-DrmLocalFile {
         }
         'Exe' {
             $a = Expand-DrmTemplate $userArgs @{ LogFile = ($logBase + '.log') }
-            $p = Invoke-DrmProcess -FilePath $path -Arguments $a -WorkingDirectory (Split-Path -Path $path -Parent) -TimeoutMinutes 90
+            $engine = [string](Get-DrmProp $Info 'Engine' '')
+            $timeout = Get-DrmExeTimeout -Engine $engine -Arguments $a
+            $p = Invoke-DrmProcess -FilePath $path -Arguments $a -WorkingDirectory (Split-Path -Path $path -Parent) -TimeoutMinutes $timeout
+            if ($p.TimedOut -and $engine -eq 'InstallShield') {
+                $hint = 'ตัวติดตั้ง InstallShield แบบ InstallScript ต้องใช้ไฟล์ตอบ: ล้างช่อง "ตัวเลือก" เพื่อเปิดหน้าต่างของผู้ผลิตแล้วกดติดตั้งเอง หรือสร้างไฟล์ตอบด้วย setup.exe /r /f1"C:\setup.iss" แล้วใส่ตัวเลือก /s /f1"C:\setup.iss"'
+                return New-DrmResult -Status 'Failed' -Detail ('หมดเวลา {0} นาที — {1}' -f $timeout, $hint) -Method 'Exe'
+            }
         }
         'Msi' {
             $a = '/i "{0}" {1} /l*v "{2}.msi.log"' -f $path, $(if ($userArgs) { $userArgs } else { '/qn /norestart' }), $logBase
@@ -2277,7 +2720,16 @@ function Install-DrmLocalFile {
         'Archive' {
             $dest = Join-Path $session.WorkDir ('extract_' + (Get-DrmSafeFileName ([IO.Path]::GetFileNameWithoutExtension($path))) + '_' + (Get-DrmTimestamp -Format 'HHmmssfff'))
             Set-DrmItemStatus -Id $ItemId -Status 'Running' -Detail 'กำลังแตกไฟล์'
-            if (-not (Expand-DrmArchive -Path $path -Destination $dest)) { return New-DrmResult -Status 'Failed' -Detail 'แตกไฟล์ไม่ได้ — ติดตั้ง 7-Zip จากแท็บรันไทม์แล้วลองใหม่' }
+            # DRM-116: ช่อง "ตัวเลือก" ของไฟล์บีบอัดคือรหัสผ่าน (ไม่บันทึกลง log)
+            $ex = Expand-DrmArchive -Path $path -Destination $dest -Password $userArgs
+            if (-not $ex.Ok) {
+                $why = switch ($ex.Reason) {
+                    'Password' { 'ไฟล์บีบอัดมีรหัสผ่าน — ใส่รหัสผ่านในช่อง "ตัวเลือก" ของไฟล์นี้แล้วลองใหม่ (ถ้าใส่แล้วแปลว่ารหัสผ่านไม่ถูกต้อง)' }
+                    'Needs7Zip' { 'ไฟล์แยกหลายส่วน/มีรหัสผ่าน/รูปแบบนี้ต้องใช้ 7-Zip — เลือก 7-Zip ในแท็บรันไทม์แล้วลองใหม่ (ไฟล์ทุกส่วนต้องอยู่โฟลเดอร์เดียวกัน)' }
+                    default { 'แตกไฟล์ไม่ได้ — ไฟล์อาจเสียหายหรือดาวน์โหลดไม่ครบ ให้ดาวน์โหลดใหม่จากเว็บผู้ผลิต' }
+                }
+                return New-DrmResult -Status 'Failed' -Detail $why -Method 'Archive'
+            }
             return Install-DrmResolvedInstaller -Dir $dest -ItemId $ItemId -AllowUnsigned:$AllowUnsigned -Depth $Depth
         }
         'Image' {
@@ -2306,12 +2758,20 @@ function Install-DrmLocalFile {
     return New-DrmResult -Status $st -ExitCode $p.ExitCode -RebootRequired ($st -eq 'InstalledReboot') -Method $kind -Detail $(if ($st -eq 'Failed') { "รหัส $(Format-DrmExitCode $p.ExitCode) — ดู log ของผู้ผลิตหรือ $logBase*" } else { '' })
 }
 
+function Get-DrmExeTimeout {
+    <# DRM-115: InstallShield แบบเงียบที่ค้างมักรอไฟล์ตอบ → หมดเวลาเร็วขึ้น (20 นาที) ตัวอื่น 90 นาที; ไม่มีตัวเลือกเงียบ = ผู้ใช้กดเองในหน้าต่าง (120 นาที) #>
+    param([string]$Engine, [string]$Arguments)
+    if (-not ([string]$Arguments).Trim()) { return 120 }
+    if ($Engine -eq 'InstallShield') { return 20 }
+    return 90
+}
+
 function Install-DrmResolvedInstaller {
     param([string]$Dir, [string]$ItemId, [switch]$AllowUnsigned, [int]$Depth = 0)
     $target = Resolve-DrmExtractedInstaller -Dir $Dir
     if (-not $target) { return New-DrmResult -Status 'Failed' -Detail ("ไม่พบตัวติดตั้งใน {0}" -f $Dir) }
     Write-DrmLog ("พบตัวติดตั้งข้างใน: {0}" -f $target)
-    $inner = Get-DrmInstallerInfo -Path $target
+    $inner = @(Get-DrmInstallerInfo -Path $target)
     if ($inner.Count -eq 0) { return New-DrmResult -Status 'Failed' -Detail ("ไม่รู้จักไฟล์ {0}" -f $target) }
     return Install-DrmLocalFile -Info $inner[0] -ItemId $ItemId -AllowUnsigned:$AllowUnsigned -Depth ($Depth + 1)
 }
@@ -2333,8 +2793,15 @@ function Resolve-DrmPnputilResult {
 # ---------------------------------------------------------------------------
 # ความปลอดภัยก่อนติดตั้ง: จุดคืนค่าและสำรองไดรเวอร์
 # ---------------------------------------------------------------------------
+function Test-DrmIsServer {
+    <# Windows Server ไม่มี System Restore (DRM-103) — Win32_OperatingSystem.ProductType 2/3 #>
+    if (-not (Test-DrmIsWindows)) { return $false }
+    try { return ([int](Get-CimInstance -ClassName Win32_OperatingSystem -ErrorAction Stop).ProductType -ne 1) } catch { return $false }
+}
+
 function New-DrmRestorePoint {
     param([string]$Description = ('Driver & Runtime Manager ' + (Get-DrmTimestamp -Format 'yyyy-MM-dd HH:mm')))
+    if (Test-DrmIsServer) { Write-DrmLog 'Windows Server ไม่มีระบบจุดคืนค่า (System Restore) — ข้ามขั้นนี้ ใช้ "สำรองไดรเวอร์เดิม" หรือ Windows Server Backup แทน' -Level Info; return $false }
     if ($script:DrmState.DryRun) { Write-DrmLog 'ทดลอง: จะสร้างจุดคืนค่าระบบ' -Level Debug; return $true }
     $freqKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
     $oldFreq = Get-DrmRegistryValue $freqKey 'SystemRestorePointCreationFrequency'
@@ -2402,10 +2869,19 @@ function New-DrmPlan {
     $seq = 0
     $sorted = @($plan | Sort-Object Phase, OrderIndex, Name)
     foreach ($p in $sorted) { $seq++; $p | Add-Member -NotePropertyName Sequence -NotePropertyValue $seq -Force }
-    return , $sorted
+    return $sorted
 }
 
 function Get-DrmResumeFile { param([string]$Root) Join-Path $Root 'resume.json' }
+
+function Get-DrmResumeCommand {
+    <# DRM-102: คำสั่งใน RunOnce — ตัวเปิด .cmd หรือ .ps1 (ผ่าน Windows PowerShell แบบ STA) พร้อม -Resume; ถ้ามี -Root ที่ไม่ใช่ค่าเริ่มต้นต้องส่งต่อ #>
+    param([string]$LauncherPath, [string]$Root)
+    if (-not $LauncherPath) { return $null }
+    $rootArg = if ($Root) { ' -Root "{0}"' -f $Root.TrimEnd('\') } else { '' }
+    if ($LauncherPath -match '\.ps1$') { return ('powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File "{0}" -Resume{1}' -f $LauncherPath, $rootArg) }
+    return ('"{0}" -Resume{1}' -f $LauncherPath, $rootArg)
+}
 
 function Save-DrmResumeState {
     param([object[]]$Remaining, $Options, $Session, $Snapshot, [int]$Attempt = 1, [string]$LauncherPath)
@@ -2415,11 +2891,16 @@ function Save-DrmResumeState {
         Options = $Options; Snapshot = $Snapshot; Items = @($Remaining)
     }
     [IO.File]::WriteAllText($file, ($state | ConvertTo-Json -Depth 12), $script:Utf8Bom)
-    if ($LauncherPath -and (Test-Path -LiteralPath $LauncherPath)) {
-        $cmd = '"{0}" -Resume' -f $LauncherPath
-        New-Item -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Force | Out-Null
-        Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'DriverRuntimeManagerResume' -Value $cmd
-        Write-DrmLog ("ตั้งให้ทำงานต่ออัตโนมัติหลังรีสตาร์ท: {0}" -f $cmd) -Level Ok
+    if ($LauncherPath -and (Test-Path -LiteralPath $LauncherPath) -and (Test-DrmIsWindows)) {
+        $defaultRoot = if ($env:ProgramData) { Join-Path $env:ProgramData 'DriverRuntimeManager' } else { '' }
+        $cmd = Get-DrmResumeCommand -LauncherPath $LauncherPath -Root $(if ($Session.Root -ne $defaultRoot) { $Session.Root } else { '' })
+        # RunOnce รับคำสั่งยาวไม่เกิน 260 ตัวอักษร
+        if ($cmd.Length -gt 260) { Write-DrmLog ("คำสั่งทำงานต่อยาวเกิน 260 ตัวอักษร ({0}) — ย้ายโฟลเดอร์โปรแกรมให้ path สั้นลง หรือเปิดโปรแกรมเองหลังรีสตาร์ท" -f $cmd.Length) -Level Warn }
+        else {
+            New-Item -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Force | Out-Null
+            Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'DriverRuntimeManagerResume' -Value $cmd
+            Write-DrmLog ("ตั้งให้ทำงานต่ออัตโนมัติหลังรีสตาร์ท: {0}" -f $cmd) -Level Ok
+        }
     }
     return $file
 }
@@ -2434,7 +2915,7 @@ function Read-DrmResumeState {
 function Clear-DrmResumeState {
     param([string]$Root)
     Remove-Item -LiteralPath (Get-DrmResumeFile $Root) -Force -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'DriverRuntimeManagerResume' -ErrorAction SilentlyContinue
+    if (Test-DrmIsWindows) { Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'DriverRuntimeManagerResume' -ErrorAction SilentlyContinue }
 }
 
 function Invoke-DrmPlanItem {
@@ -2523,7 +3004,11 @@ function Invoke-DrmInstallPlan {
         if ($item.Phase -ne $currentPhase) {
             $currentPhase = $item.Phase
             Write-DrmLog ("----- ขั้นที่ {0}: {1} -----" -f $currentPhase, $item.PhaseName) -Level Step
-            if ($currentPhase -eq 4) { try { [void](Get-DrmWuSearch -Refresh) } catch { Write-DrmLog ("ค้นหา Windows Update ใหม่ไม่สำเร็จ: {0}" -f $_.Exception.Message) -Level Warn } }
+            if ($currentPhase -eq 4) {
+                # ค้นหาใหม่หลังขั้นผู้ผลิต (เสนอเฉพาะที่ยังใหม่กว่า) — โหมดทดลองไม่ติดตั้งจึงไม่ต้องค้นหา (DRM-127)
+                if ($script:DrmState.DryRun) { Write-DrmLog 'โหมดทดลอง: ข้ามการค้นหา Windows Update ใหม่ก่อนขั้นที่ 4' -Level Debug }
+                else { try { [void](Get-DrmWuSearch -Refresh) } catch { Write-DrmLog ("ค้นหา Windows Update ใหม่ไม่สำเร็จ: {0}" -f $_.Exception.Message) -Level Warn } }
+            }
             if ($currentPhase -ge 5) { [void](Get-DrmUninstallEntries -Refresh) }
         }
         Set-DrmProgress (5 + 80.0 * ($i - 1) / [Math]::Max(1, $total)) ("[{0}/{1}] {2}" -f $i, $total, $item.Name)
@@ -2563,7 +3048,10 @@ function Invoke-DrmInstallPlan {
         foreach ($rem in $remaining) { Set-DrmItemStatus -Id $rem.Id -Status 'รอทำต่อหลังรีสตาร์ท' }
         $summary = [pscustomobject]@{ Results = $results.ToArray(); RebootRequired = $true; Resume = $true; Report = $null; Remaining = $remaining.Count }
         Send-DrmEvent -Type 'InstallCheckpoint' -Data @{ Summary = $summary }
-        if (-not $script:DrmState.DryRun) {
+        if (-not [bool](Get-DrmProp $opt 'RestartAfterCheckpoint' $true)) {
+            Write-DrmLog 'ไม่รีสตาร์ทเอง (RestartAfterCheckpoint = false) — รีสตาร์ทแล้วเปิดโปรแกรมด้วย -Resume เพื่อทำต่อ' -Level Warn
+        }
+        elseif (-not $script:DrmState.DryRun) {
             Write-DrmLog 'รีสตาร์ทใน 60 วินาที (ยกเลิกได้ด้วยคำสั่ง shutdown /a)' -Level Warn
             & shutdown.exe /r /t 60 /c "Driver & Runtime Manager: รีสตาร์ทหลังติดตั้ง BIOS/ชิปเซ็ต แล้วจะทำงานต่ออัตโนมัติ" | Out-Null
         }
@@ -2581,12 +3069,12 @@ function Invoke-DrmInstallPlan {
     Set-DrmProgress 92 'ตรวจผลหลังติดตั้งและความเข้ากันได้'
     Write-DrmLog '===== ตรวจผลหลังติดตั้ง =====' -Level Step
     $packagesAfter = @(); $devicesAfter = @(); $runtimesAfter = @()
-    try { $packagesAfter = Get-DrmDriverPackages } catch { }
-    try { $devicesAfter = Get-DrmDeviceInventory -Packages $packagesAfter -Catalog $Catalog } catch { }
-    try { $runtimesAfter = Get-DrmRuntimeItems -Catalog $Catalog -System $System -Offline } catch { }
+    try { $packagesAfter = @(Get-DrmDriverPackages) } catch { }
+    try { $devicesAfter = @(Get-DrmDeviceInventory -Packages $packagesAfter -Catalog $Catalog) } catch { }
+    try { $runtimesAfter = @(Get-DrmRuntimeItems -Catalog $Catalog -System $System -Offline) } catch { }
     $systemAfter = $System
     try { $systemAfter = Get-DrmSystemInfo -Catalog $Catalog -SkipNetworkTest } catch { }
-    $checks = Get-DrmCompatibilityChecks -System $systemAfter -Devices $devicesAfter -DevicesBefore $DevicesBefore -Runtimes $runtimesAfter -Results $results.ToArray() -OldPackages (Get-DrmOldDriverPackages -Packages $packagesAfter -Devices $devicesAfter)
+    $checks = @(Get-DrmCompatibilityChecks -System $systemAfter -Devices $devicesAfter -DevicesBefore $DevicesBefore -Runtimes $runtimesAfter -Results $results.ToArray() -OldPackages @(Get-DrmOldDriverPackages -Packages $packagesAfter -Devices $devicesAfter))
     $report = New-DrmReport -Title 'รายงานการติดตั้ง' -System $systemAfter -Devices $devicesAfter -DevicesBefore $DevicesBefore -Runtimes $runtimesAfter -Results $results.ToArray() -Checks $checks -Cleanup $cleanup
     $ok = @($results | Where-Object { $_.Result.Status -in 'Installed', 'InstalledReboot', 'UpToDate', 'Staged', 'DryRun' }).Count
     $fail = @($results | Where-Object { $_.Result.Status -eq 'Failed' }).Count
@@ -2680,8 +3168,8 @@ function Invoke-DrmCleanup {
     # 5) แพ็กเกจไดรเวอร์รุ่นเก่าที่ไม่ได้ใช้ (ไม่ใช้ /force — ระบบจะปฏิเสธถ้ายังใช้อยู่)
     $removedPkgs = 0
     if ([bool](Get-DrmProp $Options 'RemoveOldDrivers' $false)) {
-        $pk = Get-DrmDriverPackages -SkipCertificates
-        $dev = Get-DrmDeviceInventory -Packages $pk
+        $pk = @(Get-DrmDriverPackages -SkipCertificates)
+        $dev = @(Get-DrmDeviceInventory -Packages $pk)
         foreach ($o in (Get-DrmOldDriverPackages -Packages $pk -Devices $dev)) {
             Write-DrmLog ("ลบแพ็กเกจไดรเวอร์รุ่นเก่า {0} ({1} {2} → มีรุ่น {3})" -f $o.PublishedName, $o.Provider, $o.Version, $o.NewerVersion)
             $p = Invoke-DrmProcess -FilePath 'pnputil.exe' -Arguments ('/delete-driver {0}' -f $o.PublishedName) -Capture
@@ -2750,7 +3238,41 @@ function Get-DrmCompatibilityChecks {
         $st = switch ($r.Result.Status) { 'Failed' { 'ไม่ผ่าน' } { $_ -in 'Skipped', 'NotApplicable', 'Manual', 'Cancelled' } { 'เตือน' } default { 'ผ่าน' } }
         & $add ('ติดตั้ง: ' + $r.PhaseName) $r.Name $st ('{0} {1}' -f $r.Result.StatusText, $r.Result.Detail).Trim()
     }
-    return , $list.ToArray()
+    return $list.ToArray()
+}
+
+function Get-DrmDriverChanges {
+    <# DRM-120: เทียบอุปกรณ์ก่อน/หลังติดตั้ง (ตาม DeviceId) — เวอร์ชันไดรเวอร์ที่เปลี่ยน ปัญหาที่หาย/เกิดใหม่ และอุปกรณ์ที่เพิ่งพบ #>
+    param($Before = @(), $After = @())
+    $old = @{}
+    foreach ($d in @($Before)) { if ($d -and $d.DeviceId) { $old[[string]$d.DeviceId] = $d } }
+    foreach ($a in @($After)) {
+        if (-not $a -or -not $a.DeviceId) { continue }
+        $b = $old[[string]$a.DeviceId]
+        $change = ''
+        if (-not $b) { if ($a.Present -and $a.DriverVersion) { $change = 'New' } }
+        elseif ([string]$b.DriverVersion -ne [string]$a.DriverVersion -or [string]$b.InfName -ne [string]$a.InfName) { $change = 'Updated' }
+        elseif ([int]$b.ProblemCode -ne 0 -and [int]$a.ProblemCode -eq 0) { $change = 'Fixed' }
+        elseif ([int]$b.ProblemCode -eq 0 -and [int]$a.ProblemCode -ne 0) { $change = 'Broken' }
+        if (-not $change) { continue }
+        if ($b -and [int]$b.ProblemCode -ne 0 -and [int]$a.ProblemCode -eq 0 -and $change -eq 'Updated') { $change = 'UpdatedFixed' }
+        if ($b -and [int]$b.ProblemCode -eq 0 -and [int]$a.ProblemCode -ne 0 -and $change -eq 'Updated') { $change = 'UpdatedBroken' }
+        $text = switch ($change) {
+            'New' { 'พบอุปกรณ์/ไดรเวอร์ใหม่' }
+            'Updated' { 'อัปเดตไดรเวอร์' }
+            'UpdatedFixed' { 'อัปเดตไดรเวอร์และแก้ปัญหาแล้ว' }
+            'UpdatedBroken' { 'อัปเดตแล้วเกิดปัญหา — ตรวจด่วน' }
+            'Fixed' { 'ปัญหาหายแล้ว' }
+            'Broken' { 'เกิดปัญหาหลังติดตั้ง — ตรวจด่วน' }
+        }
+        [pscustomobject]@{
+            DeviceId = $a.DeviceId; Name = $a.Name; Class = $a.Class; Change = $change; ChangeText = $text
+            OldVersion = $(if ($b) { $b.DriverVersion } else { '' }); NewVersion = $a.DriverVersion
+            OldInf = $(if ($b) { $b.InfName } else { '' }); NewInf = $a.InfName
+            OldProblem = $(if ($b) { [int]$b.ProblemCode } else { 0 }); NewProblem = [int]$a.ProblemCode
+            Level = $(if ($change -in 'Broken', 'UpdatedBroken') { 'error' } else { 'ok' })
+        }
+    }
 }
 
 function ConvertTo-DrmHtml { param([AllowNull()]$Text) [Net.WebUtility]::HtmlEncode([string]$Text) }
@@ -2760,10 +3282,12 @@ function New-DrmReport {
     $session = Get-DrmSession
     $stamp = Get-DrmTimestamp -Format 'yyyyMMdd_HHmmss'
     $base = Join-Path $session.ReportDir ("DRM_Report_{0}" -f $stamp)
+    $changes = @(if (@($DevicesBefore).Count -gt 0) { Get-DrmDriverChanges -Before $DevicesBefore -After $Devices })
     $data = [ordered]@{
         Title = $Title; Version = $script:DrmVersion; Generated = (Get-DrmTimestamp); Session = $session.Id; DryRun = $script:DrmState.DryRun; LogFile = $session.LogFile
         System = $System; Checks = @($Checks); Results = @($Results | ForEach-Object { [ordered]@{ Name = $_.Name; Phase = $_.PhaseName; Kind = $_.Kind; Status = $_.Result.Status; StatusText = $_.Result.StatusText; Detail = $_.Result.Detail; Advice = (Get-DrmProp $_.Result 'Advice' ''); ExitCode = $_.Result.ExitCode; Reboot = $_.Result.RebootRequired; Method = $_.Result.Method; Seconds = (Get-DrmProp $_ 'Seconds' 0) } })
         Devices = @($Devices | Select-Object Name, Class, VendorName, DriverProvider, DriverVersion, DriverDate, InfName, CertLevel, ProblemCode, ProblemText, Advice, CatalogUrl, Present, OrderGroup, DeviceId)
+        DriverChanges = @($changes)
         Runtimes = @($Runtimes | Select-Object Id, Name, Group, Installed, InstalledVersion, LatestVersion, State)
         WindowsUpdateDrivers = @($WuDrivers | Select-Object Title, DriverClass, DeviceName, InstalledVersion, OfferedVersion, OfferedDate, Comparison)
         OemScan = $OemScan; Cleanup = $Cleanup
@@ -2802,6 +3326,14 @@ tr.error td{background:#fdecea}tr.warn td{background:#fff8e1}small{color:#667}
             $n++
             $c = switch ($r.Result.Status) { 'Failed' { 'err' } { $_ -in 'Skipped', 'Manual', 'NotApplicable', 'Cancelled' } { 'warn' } default { 'ok' } }
             [void]$sb.AppendFormat('<tr><td>{0}</td><td>{1}</td><td>{2}</td><td class="{3}">{4}</td><td>{5}</td><td>{6}</td><td>{7}</td><td>{8}</td><td>{9}</td></tr>', $n, (ConvertTo-DrmHtml $r.PhaseName), (ConvertTo-DrmHtml $r.Name), $c, (ConvertTo-DrmHtml $r.Result.StatusText), (ConvertTo-DrmHtml $r.Result.Method), (ConvertTo-DrmHtml (Format-DrmExitCode $r.Result.ExitCode)), (Get-DrmProp $r 'Seconds' ''), (ConvertTo-DrmHtml $r.Result.Detail), (ConvertTo-DrmHtml (Get-DrmProp $r.Result 'Advice' '')))
+        }
+        [void]$sb.Append('</table></section>')
+    }
+    if ($changes.Count -gt 0) {
+        [void]$sb.AppendFormat('<section><h2>ไดรเวอร์ที่เปลี่ยนแปลงหลังติดตั้ง ({0})</h2><table><tr><th>อุปกรณ์</th><th>คลาส</th><th>การเปลี่ยนแปลง</th><th>เวอร์ชันเดิม</th><th>เวอร์ชันใหม่</th><th>INF</th></tr>', $changes.Count)
+        foreach ($c in $changes) {
+            $cc = if ($c.Level -eq 'error') { 'err' } else { 'ok' }
+            [void]$sb.AppendFormat('<tr><td>{0}</td><td>{1}</td><td class="{2}">{3}</td><td>{4}</td><td>{5}</td><td>{6}</td></tr>', (ConvertTo-DrmHtml $c.Name), (ConvertTo-DrmHtml $c.Class), $cc, (ConvertTo-DrmHtml $c.ChangeText), (ConvertTo-DrmHtml $c.OldVersion), (ConvertTo-DrmHtml $c.NewVersion), (ConvertTo-DrmHtml $c.NewInf))
         }
         [void]$sb.Append('</table></section>')
     }
@@ -2862,23 +3394,26 @@ function Invoke-DrmScan {
     Write-DrmLog ("เครื่อง: {0} {1} | {2} {3} บิลด์ {4}.{5} | {6}" -f $system.Hardware.Manufacturer, $system.Hardware.Model, $system.OS.Caption, $system.OS.DisplayVersion, $system.OS.Build, $system.OS.UBR, $system.OS.Architecture)
     if ($system.Lifecycle) { Write-DrmLog $system.Lifecycle.Message -Level $(if ($system.Lifecycle.Status -eq 'Supported') { 'Ok' } else { 'Warn' }) }
     Set-DrmProgress 25 'อ่าน Driver Store และตรวจใบรับรองของไดรเวอร์'
-    $packages = Get-DrmDriverPackages -SkipCertificates:$SkipCertificates
+    $packages = @(Get-DrmDriverPackages -SkipCertificates:$SkipCertificates)
     Set-DrmProgress 50 'ตรวจอุปกรณ์ทั้งหมดและไดรเวอร์ที่ใช้งาน'
-    $devices = Get-DrmDeviceInventory -Packages $packages -Catalog $Catalog
+    $devices = @(Get-DrmDeviceInventory -Packages $packages -Catalog $Catalog)
     $present = @($devices | Where-Object { $_.Present })
     $problems = @($present | Where-Object { $_.ProblemCode -ne 0 -and $_.ProblemCode -ne 22 })
     Write-DrmLog ("อุปกรณ์ {0} ตัว (เชื่อมต่ออยู่ {1}), มีปัญหา {2}, แพ็กเกจไดรเวอร์ผู้ผลิต {3}" -f $devices.Count, $present.Count, $problems.Count, $packages.Count) -Level $(if ($problems.Count) { 'Warn' } else { 'Ok' })
     foreach ($p in $problems) { Write-DrmLog ("  ! {0} [{1}] {2}" -f $p.Name, $p.Class, $p.ProblemText) -Level Warn }
-    $old = Get-DrmOldDriverPackages -Packages $packages -Devices $devices
+    $old = @(Get-DrmOldDriverPackages -Packages $packages -Devices $devices)
     Set-DrmProgress 70 'ตรวจรันไทม์และโปรแกรมเสริม'
-    $runtimes = Get-DrmRuntimeItems -Catalog $Catalog -Arch $system.OS.Architecture -System $system -Offline:$Offline
-    $oem = Get-DrmOemProfile -System $system -Catalog $Catalog
-    $vendors = Get-DrmComponentVendorTools -Devices $present -Catalog $Catalog -OemProfile $oem
+    $runtimes = @(Get-DrmRuntimeItems -Catalog $Catalog -Arch $system.OS.Architecture -System $system -Offline:$Offline)
+    $hpia = $null
+    if (-not $Offline -and ([string]$system.Hardware.Manufacturer) -match '^(HP|Hewlett)') { $hpia = Get-DrmHpiaPlatformList }
+    $oem = Get-DrmOemProfile -System $system -Catalog $Catalog -HpiaPlatforms $hpia
+    if ($oem.MatchedBy) { Write-DrmLog $oem.MatchedBy -Level Debug }
+    $vendors = @(Get-DrmComponentVendorTools -Devices $present -Catalog $Catalog -OemProfile $oem)
     Write-DrmLog ("ผู้ผลิตเครื่อง: {0} → เครื่องมือ: {1}" -f $oem.Manufacturer, $oem.Name)
-    $checks = Get-DrmCompatibilityChecks -System $system -Devices $devices -Runtimes $runtimes -OldPackages $old
+    $checks = @(Get-DrmCompatibilityChecks -System $system -Devices $devices -Runtimes $runtimes -OldPackages $old)
     Set-DrmProgress 100 'ตรวจระบบเสร็จ'
     Write-DrmLog '===== ตรวจระบบเสร็จ =====' -Level Ok
-    return [pscustomobject]@{ System = $system; SystemRows = (ConvertTo-DrmSystemRows -System $system); Devices = $devices; Packages = $packages; OldPackages = $old; Runtimes = $runtimes; OemProfile = $oem; VendorTools = $vendors; Checks = $checks }
+    return [pscustomobject]@{ System = $system; SystemRows = @(ConvertTo-DrmSystemRows -System $system); Devices = $devices; Packages = $packages; OldPackages = $old; Runtimes = $runtimes; OemProfile = $oem; VendorTools = $vendors; Checks = $checks }
 }
 
 function Invoke-DrmUpdateCheck {
@@ -2898,7 +3433,7 @@ function Invoke-DrmUpdateCheck {
     if (-not $SkipWindowsUpdate) {
         Set-DrmProgress 45 'ตรวจไดรเวอร์ที่ Microsoft รับรองจาก Windows Update'
         Write-DrmLog '===== 2) ตรวจไดรเวอร์ที่ Microsoft รับรอง (Windows Update) =====' -Level Step
-        $wu = Find-DrmWindowsUpdateDrivers -Devices $Devices
+        $wu = @(Find-DrmWindowsUpdateDrivers -Devices $Devices)
         foreach ($w in $wu) { Write-DrmLog ("  • {0} — {1} (ติดตั้งอยู่ {2})" -f $w.Title, $w.ComparisonText, $(if ($w.InstalledVersion) { $w.InstalledVersion } else { '-' })) }
     }
     Set-DrmProgress 100 'ตรวจหาอัปเดตเสร็จ'
@@ -2909,6 +3444,19 @@ function Invoke-DrmUpdateCheck {
 # v1.1: รุ่น การเปิดหน้าเว็บ ฐานข้อมูลรหัสข้อผิดพลาด
 # ---------------------------------------------------------------------------
 function Get-DrmVersion { $script:DrmVersion }
+
+function Test-DrmLegacyConsole {
+    <# DRM-110: true เมื่อรันในคอนโซลแบบเก่าของ Windows (ไม่ใช่ Windows Terminal/VS Code/ConEmu และไม่ถูก redirect) #>
+    param([hashtable]$Environment, [string]$HostName = $Host.Name, [bool]$OnWindows = (Test-DrmIsWindows), $OutputRedirected = $null)
+    if (-not $OnWindows -or $HostName -ne 'ConsoleHost') { return $false }
+    if ($null -eq $OutputRedirected) { try { $OutputRedirected = [Console]::IsOutputRedirected } catch { $OutputRedirected = $true } }
+    if ($OutputRedirected) { return $false }
+    foreach ($n in 'WT_SESSION', 'TERM_PROGRAM', 'ConEmuPID', 'GITHUB_ACTIONS') {
+        $v = if ($Environment) { $Environment[$n] } else { [Environment]::GetEnvironmentVariable($n) }
+        if ($v) { return $false }
+    }
+    return $true
+}
 
 function Open-DrmTarget {
     <# เปิดหน้าเว็บ/โปรแกรมของผู้ผลิต — ข้ามในโหมดทดลองและโหมดคำสั่ง (NoBrowser) แต่บันทึกไว้ให้ผู้ใช้เปิดเอง #>
@@ -3050,7 +3598,7 @@ function Get-DrmRedactionList {
         $sn = [string](Get-CimInstance Win32_BIOS -ErrorAction Stop).SerialNumber
         if ($sn -and $sn.Trim().Length -ge 4 -and $sn -notmatch 'O\.E\.M|Default|System Serial|None|^0+$') { $list.Add($sn.Trim()) }
     } catch { }
-    return , ($list.ToArray() | Select-Object -Unique)
+    return ($list.ToArray() | Select-Object -Unique)
 }
 
 function Get-DrmFileTail {
@@ -3097,7 +3645,7 @@ function New-DrmDiagnosticsBundle {
     $dir = Join-Path $session.ReportDir ("Diag_{0}" -f $stamp)
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     $since = (Get-Date).AddHours(-$SinceHours)
-    $secrets = if ($IncludeIdentifiers) { @() } else { Get-DrmRedactionList }
+    $secrets = @(if (-not $IncludeIdentifiers) { Get-DrmRedactionList })
     $files = New-Object System.Collections.Generic.List[string]
     $save = {
         param([string]$Name, [string]$Text)
@@ -3122,7 +3670,7 @@ function New-DrmDiagnosticsBundle {
     & $save 'summary.txt' $sb.ToString()
 
     Set-DrmProgress 30 'อุปกรณ์และไดรเวอร์'
-    if (-not $Devices) { try { $Devices = Get-DrmDeviceInventory -Packages (Get-DrmDriverPackages) -Catalog $Catalog } catch { $Devices = @() } }
+    if (-not $Devices) { try { $Devices = @(Get-DrmDeviceInventory -Packages @(Get-DrmDriverPackages) -Catalog $Catalog) } catch { $Devices = @() } }
     $problemText = New-Object System.Text.StringBuilder
     foreach ($d in @($Devices | Where-Object { $_.Present -and $_.ProblemCode -ne 0 })) {
         [void]$problemText.AppendLine(('{0} [{1}] {2}' -f $d.Name, $d.Class, $d.ProblemText))
@@ -3147,6 +3695,16 @@ function New-DrmDiagnosticsBundle {
     if (Test-Path -LiteralPath $workRoot) {
         foreach ($f in @(Get-ChildItem -Path $workRoot -Recurse -File -Include *.xml, *.json -ErrorAction SilentlyContinue | Where-Object { $_.DirectoryName -match 'oem-' -and $_.LastWriteTime -ge $since -and $_.Length -lt 5MB } | Sort-Object LastWriteTime -Descending | Select-Object -First 10)) {
             try { & $save ('oem_' + $f.Name) ([IO.File]::ReadAllText($f.FullName)) } catch { }
+        }
+    }
+
+    # log ของเครื่องมือผู้ผลิตเอง (Dell Command | Update, Lenovo System Update) ตาม logDirs ในแคตตาล็อก
+    foreach ($d in @($Catalog.oemTools | ForEach-Object { Get-DrmProp $_ 'logDirs' @() } | ForEach-Object { $_ } | Sort-Object -Unique)) {
+        $ld = Expand-DrmPath $d
+        if (-not $ld -or -not (Test-Path -LiteralPath $ld)) { continue }
+        $tag = (($d -replace '%[^%]+%\\?', '') -replace '[\\/: ]+', '-').Trim('-')
+        foreach ($f in @(Get-ChildItem -LiteralPath $ld -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in '.log', '.txt', '.xml' -and $_.LastWriteTime -ge $since } | Sort-Object LastWriteTime -Descending | Select-Object -First 10)) {
+            try { & $save ('oemlog_{0}_{1}' -f $tag, $f.Name) (Get-DrmFileTail -Path $f.FullName -MaxBytes 1MB) } catch { }
         }
     }
 
@@ -3176,6 +3734,7 @@ function New-DrmDiagnosticsBundle {
         'logs_*                      log ของโปรแกรมและผลลัพธ์คำสั่งที่ล้มเหลว (Output_*)'
         'report_*                    รายงานล่าสุด'
         'oem_*                       รายงานดิบจาก Dell Command | Update / HP Image Assistant (ถ้ามี)'
+        'oemlog_*                    log ของเครื่องมือผู้ผลิตเอง (Dell Command | Update, Lenovo System Update)'
         'setupapi-dev-tail.log       ส่วนท้ายของ log การติดตั้งไดรเวอร์ของ Windows'
         'events-*.txt                Event Log ที่เกี่ยวข้องกับไดรเวอร์ Windows Update และ MSI'
         'pnputil-enum-drivers.txt    รายการแพ็กเกจไดรเวอร์ใน Driver Store'

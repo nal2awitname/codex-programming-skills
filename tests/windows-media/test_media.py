@@ -12,15 +12,16 @@ POWERSHELL = os.environ.get("POWERSHELL_EXE") or shutil.which("pwsh") or shutil.
 
 
 class MediaEncoding(unittest.TestCase):
-    def test_windows_powershell_can_decode_thai_script(self):
-        # Windows PowerShell 5.1 otherwise decodes UTF-8 Thai as the ANSI code page.
-        self.assertTrue((ROOT / "scripts/New-Win11ProMedia.ps1").read_bytes().startswith(b"\xef\xbb\xbf"))
+    def test_script_is_ascii_for_windows_powershell_compatibility(self):
+        # ASCII help and messages work under every PowerShell 5.1 ANSI code page.
+        source = (ROOT / "scripts/New-Win11ProMedia.ps1").read_text(encoding="utf-8-sig")
+        self.assertTrue(source.isascii())
 
 
 @unittest.skipUnless(POWERSHELL, "PowerShell is required for mocked media workflow tests")
 class MediaWorkflow(unittest.TestCase):
     def test_media_workflow_regressions(self):
-        for scenario in ("edition-and-architecture", "nested-output", "linked-output", "whatif", "two-images",
+        for scenario in ("edition-and-architecture", "native-copy-success", "nested-output", "linked-output", "whatif", "two-images",
                          "stale-export", "unknown-architecture", "already-mounted"):
             with self.subTest(scenario=scenario):
                 result = subprocess.run(

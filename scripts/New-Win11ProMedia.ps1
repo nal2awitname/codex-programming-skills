@@ -1,32 +1,32 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 #Requires -RunAsAdministrator
-# Keep the UTF-8 BOM: Windows PowerShell 5.1 otherwise reads Thai as ANSI.
+# Keep this script ASCII so Windows PowerShell 5.1 reads it consistently under any ANSI code page.
 <#
 .SYNOPSIS
-สร้างชุดติดตั้ง Windows 11 ที่มีเฉพาะรุ่น Pro (Build a Windows 11 installer containing only the Pro edition).
+Build Windows 11 installation media containing only the selected edition (Pro by default).
 
 .DESCRIPTION
-รับ ISO หรือโฟลเดอร์ที่แตกไฟล์ติดตั้งแล้ว ส่งออกเฉพาะรุ่นที่ระบุจาก install.wim/install.esd
-เขียนทับด้วยไฟล์ install.wim ใหม่ที่มีรุ่นเดียว และเขียน autounattend.xml ที่เลือกรุ่นให้
-ไม่ฟอร์แมตดิสก์ใด ๆ; ถ้าระบุ -UsbDrive จะคัดลอกไฟล์ไปยัง USB ที่ฟอร์แมตไว้แล้วและว่างเปล่าเท่านั้น
+Accept an ISO or extracted setup directory and export the selected edition from install.wim/install.esd.
+Create a new install.wim with one edition and optionally write autounattend.xml to select it.
+No disks are formatted. With -UsbDrive, files are copied only to an already formatted, empty removable drive.
 
 .PARAMETER Source
-ไฟล์ .iso หรือโฟลเดอร์ที่มี setup.exe และ sources\install.wim|esd
+An .iso file or directory containing setup.exe and sources\install.wim or install.esd.
 
 .PARAMETER WorkDir
-โฟลเดอร์ทำงาน/ผลลัพธ์ (ต้องว่างหรือยังไม่มี) ใช้พื้นที่ประมาณ 15 GB
+A new or empty output directory. Allow approximately 15 GB of free space.
 
 .PARAMETER Edition
-ชื่อรุ่นตรงตัวตามที่ DISM แสดง ค่าเริ่มต้น "Windows 11 Pro"
+The exact edition name reported by DISM. Defaults to "Windows 11 Pro".
 
 .PARAMETER SkipAutounattend
-ไม่เขียน autounattend.xml
+Do not write autounattend.xml.
 
 .PARAMETER Split
-แบ่ง install.wim เป็น install.swm เมื่อไฟล์ใหญ่เกิน 4 GB (จำเป็นถ้า USB เป็น FAT32)
+Split install.wim into .swm files when larger than 4 GB, as required for FAT32 media.
 
 .PARAMETER UsbDrive
-อักษรไดรฟ์ USB เช่น E: ต้องเป็นไดรฟ์ถอดได้และว่างเปล่า
+A USB drive letter such as E:. The drive must be removable and empty.
 
 .EXAMPLE
 .\New-Win11ProMedia.ps1 -Source C:\iso\Win11.iso -WorkDir C:\Win11Pro -Split
@@ -48,10 +48,13 @@ $ErrorActionPreference = 'Stop'
 $limitBytes = 4GB - 1MB
 
 function Copy-Tree([string]$From, [string]$To) {
+    # robocopy uses 1..7 for successful status, unlike ordinary native commands.
+    # Handle its exit code here even when PowerShell's native error policy is on.
+    $PSNativeCommandUseErrorActionPreference = $false
     New-Item -ItemType Directory -Path $To -Force | Out-Null
     # Following source junctions could copy unrelated trees or recurse indefinitely.
     robocopy $From $To /E /XJ /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Null
-    if ($LASTEXITCODE -ge 8) { throw "robocopy ล้มเหลว (exit $LASTEXITCODE) จาก $From ไป $To" }
+    if ($LASTEXITCODE -ge 8) { throw "robocopy failed (exit $LASTEXITCODE) from $From to $To" }
 }
 
 function Assert-NoReparsePath([string]$Path) {
@@ -60,7 +63,7 @@ function Assert-NoReparsePath([string]$Path) {
         if (Test-Path -LiteralPath $current) {
             $item = Get-Item -LiteralPath $current -Force
             if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-                throw "ไม่รองรับเส้นทางลิงก์หรือ reparse point: $current"
+                throw "Links and reparse points are not supported: $current"
             }
         }
         $parent = Split-Path -Parent $current
@@ -71,23 +74,23 @@ function Assert-NoReparsePath([string]$Path) {
 
 $WorkDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($WorkDir)
 Assert-NoReparsePath $WorkDir
-if (Test-Path -LiteralPath $WorkDir -PathType Leaf) { throw 'WorkDir ต้องเป็นโฟลเดอร์ ไม่ใช่ไฟล์' }
+if (Test-Path -LiteralPath $WorkDir -PathType Leaf) { throw 'WorkDir must be a directory, not a file.' }
 if (Test-Path -LiteralPath $WorkDir) {
     if (Get-ChildItem -LiteralPath $WorkDir -Force | Select-Object -First 1) {
-        throw "WorkDir '$WorkDir' ไม่ว่าง ใช้โฟลเดอร์ใหม่เพื่อไม่ให้ทับไฟล์เดิม"
+        throw "WorkDir '$WorkDir' is not empty. Choose a new directory to preserve existing files."
     }
 }
 
 # Approve the whole local operation before mounting an ISO or creating files.
 # A declined confirmation must not fall through into export/delete steps.
-if (-not $PSCmdlet.ShouldProcess($WorkDir, "สร้างชุดติดตั้งรุ่น '$Edition' จาก $Source")) { return }
+if (-not $PSCmdlet.ShouldProcess($WorkDir, "Build installation media for '$Edition' from $Source")) { return }
 
-# 1) คัดลอกไฟล์ติดตั้งจาก ISO หรือโฟลเดอร์
+# 1) Copy setup files from an ISO or directory.
 $mounted = $null
 $mountedByScript = $false
 try {
     if ($Source -match '\.iso$') {
-        if (-not (Test-Path -LiteralPath $Source -PathType Leaf)) { throw "ไม่พบไฟล์ $Source" }
+        if (-not (Test-Path -LiteralPath $Source -PathType Leaf)) { throw "File not found: $Source" }
         $isoPath = (Resolve-Path -LiteralPath $Source).Path
         $mounted = Get-DiskImage -ImagePath $isoPath
         if (-not $mounted.Attached) {
@@ -95,54 +98,54 @@ try {
             $mountedByScript = $true
         }
         $letter = ($mounted | Get-Volume).DriveLetter
-        if (-not $letter) { throw 'เมานต์ ISO แล้วไม่พบอักษรไดรฟ์' }
+        if (-not $letter) { throw 'The mounted ISO has no drive letter.' }
         $srcRoot = "${letter}:\"
     } else {
-        if (-not (Test-Path -LiteralPath $Source -PathType Container)) { throw "ไม่พบโฟลเดอร์ $Source" }
+        if (-not (Test-Path -LiteralPath $Source -PathType Container)) { throw "Directory not found: $Source" }
         Assert-NoReparsePath $Source
         $srcRoot = (Resolve-Path -LiteralPath $Source).Path
     }
     $sourcePrefix = $srcRoot.TrimEnd([char[]]'\/') + [IO.Path]::DirectorySeparatorChar
     if ($WorkDir.Equals($srcRoot.TrimEnd([char[]]'\/'), [StringComparison]::OrdinalIgnoreCase) -or
         $WorkDir.StartsWith($sourcePrefix, [StringComparison]::OrdinalIgnoreCase)) {
-        throw 'WorkDir ต้องอยู่นอกโฟลเดอร์ต้นทาง เพื่อป้องกันการคัดลอกวนซ้ำ'
+        throw 'WorkDir must be outside the source directory to prevent recursive copying.'
     }
-    if (-not (Test-Path -LiteralPath (Join-Path $srcRoot 'setup.exe') -PathType Leaf)) { throw "ไม่พบ setup.exe ใน $srcRoot" }
-    Write-Host "คัดลอกไฟล์ติดตั้งจาก $srcRoot ..."
+    if (-not (Test-Path -LiteralPath (Join-Path $srcRoot 'setup.exe') -PathType Leaf)) { throw "setup.exe not found in $srcRoot" }
+    Write-Host "Copying setup files from $srcRoot ..."
     Copy-Tree $srcRoot $WorkDir
 } finally {
     # An ISO mounted before this run belongs to the user; do not unmount it.
     if ($mountedByScript) { Dismount-DiskImage -ImagePath $mounted.ImagePath | Out-Null }
 }
 
-# 2) หา index ของรุ่นที่ต้องการ (ชื่อตรงตัว ไม่เอา Pro N / Pro Education ฯลฯ)
+# 2) Match the exact edition name, excluding variants such as Pro N or Pro Education.
 $sources = Join-Path $WorkDir 'sources'
 # Picking the first image would leave the other edition container on the media.
 $sourceImages = @(@('install.wim', 'install.esd') |
     ForEach-Object { Join-Path $sources $_ } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
-if ($sourceImages.Count -ne 1) { throw 'ต้องมี sources\install.wim หรือ install.esd เพียงไฟล์เดียว' }
+if ($sourceImages.Count -ne 1) { throw 'Exactly one sources\install.wim or install.esd file is required.' }
 $srcImage = $sourceImages[0]
 
 $images = Get-WindowsImage -ImagePath $srcImage
 $target = @($images | Where-Object { $_.ImageName -eq $Edition })
 if ($target.Count -ne 1) {
     $list = ($images | ForEach-Object { "  [$($_.ImageIndex)] $($_.ImageName)" }) -join "`n"
-    throw "ต้องพบรุ่น '$Edition' เพียงหนึ่ง index ใน $srcImage`nรุ่นที่มี:`n$list"
+    throw "Expected exactly one index for '$Edition' in $srcImage`nAvailable editions:`n$list"
 }
 $index = @($target)[0].ImageIndex
-Write-Host "พบ '$Edition' ที่ index $index"
+Write-Host "Found '$Edition' at index $index"
 
-# 3) ส่งออกเฉพาะรุ่นนั้นเป็น WIM ใหม่ แล้วแทนที่ไฟล์เดิม
+# 3) Export the selected edition to a new WIM, then replace the copied source image.
 $newWim = Join-Path $sources 'install_single.wim'
 # Export-WindowsImage appends to an existing WIM instead of replacing it.
-if (Test-Path -LiteralPath $newWim) { throw 'มี install_single.wim อยู่แล้ว หยุดเพื่อไม่ส่งออกต่อท้ายอิมเมจเดิม' }
-Write-Host 'กำลังส่งออกอิมเมจ (ใช้เวลาหลายนาที) ...'
+if (Test-Path -LiteralPath $newWim) { throw 'install_single.wim already exists. Refusing to append to an existing image.' }
+Write-Host 'Exporting the image (this can take several minutes) ...'
 Export-WindowsImage -SourceImagePath $srcImage -SourceIndex $index `
     -DestinationImagePath $newWim -CompressionType Maximum -CheckIntegrity | Out-Null
 
 $check = @(Get-WindowsImage -ImagePath $newWim)
 if ($check.Count -ne 1 -or $check[0].ImageName -ne $Edition) {
-    throw "ตรวจอิมเมจใหม่ไม่ผ่าน: พบ $($check.Count) รุ่น"
+    throw "Exported image validation failed: found $($check.Count) editions."
 }
 $imageArchitecture = $null
 if (-not $SkipAutounattend) {
@@ -156,24 +159,24 @@ if (-not $SkipAutounattend) {
         'x64' { 'amd64' }
         'amd64' { 'amd64' }
         'arm64' { 'arm64' }
-        default { throw "ไม่รองรับสถาปัตยกรรมอิมเมจ '$($detail.Architecture)' สำหรับ autounattend.xml" }
+        default { throw "Unsupported image architecture '$($detail.Architecture)' for autounattend.xml" }
     }
 }
 Remove-Item -LiteralPath $srcImage -Force
 $finalWim = Join-Path $sources 'install.wim'
 Rename-Item -LiteralPath $newWim -NewName 'install.wim'
 
-# 4) แบ่งไฟล์ถ้าต้องใช้กับ FAT32
+# 4) Split large images when FAT32 compatibility is requested.
 $size = (Get-Item $finalWim).Length
-Write-Host ('ขนาด install.wim: {0:N2} GB' -f ($size / 1GB))
+Write-Host ('install.wim size: {0:N2} GB' -f ($size / 1GB))
 if ($size -gt $limitBytes) {
     if ($Split) {
-        Write-Host 'แบ่งเป็น install.swm ...'
+        Write-Host 'Splitting into install.swm files ...'
         dism.exe /Split-Image /ImageFile:"$finalWim" /SWMFile:"$(Join-Path $sources 'install.swm')" /FileSize:3800
-        if ($LASTEXITCODE -ne 0) { throw "dism /Split-Image ล้มเหลว (exit $LASTEXITCODE)" }
+        if ($LASTEXITCODE -ne 0) { throw "dism /Split-Image failed (exit $LASTEXITCODE)" }
         Remove-Item -LiteralPath $finalWim -Force
     } else {
-        Write-Warning 'ไฟล์เกิน 4 GB: ใส่ USB แบบ FAT32 ไม่ได้ ให้รันใหม่ด้วย -Split หรือใช้ USB แบบ NTFS/exFAT'
+        Write-Warning 'The image exceeds 4 GB and cannot fit on FAT32. Rerun with -Split or use NTFS/exFAT media.'
     }
 }
 
@@ -204,26 +207,26 @@ if (-not $SkipAutounattend) {
 </unattend>
 "@
     Set-Content -LiteralPath (Join-Path $WorkDir 'autounattend.xml') -Value $xml -Encoding UTF8 -Force
-    Write-Host 'เขียน autounattend.xml แล้ว (ไม่มีการแบ่งดิสก์ คุณเลือกไดรฟ์ติดตั้งเอง)'
+    Write-Host 'Wrote autounattend.xml. No disks are partitioned; select the installation drive during setup.'
 }
 
-# 6) คัดลอกลง USB (ไม่ฟอร์แมต)
+# 6) Copy to the USB drive without formatting it.
 if ($UsbDrive) {
-    if ($UsbDrive -notmatch '^[A-Za-z]:?\\?$') { throw 'UsbDrive ต้องเป็นอักษรไดรฟ์ เช่น E:' }
+    if ($UsbDrive -notmatch '^[A-Za-z]:?\\?$') { throw 'UsbDrive must be a drive letter such as E:.' }
     $dl = $UsbDrive.TrimEnd(':', '\').ToUpper()
     $vol = Get-Volume -DriveLetter $dl -ErrorAction Stop
-    if ($vol.DriveType -ne 'Removable') { throw "ไดรฟ์ ${dl}: ไม่ใช่ไดรฟ์ถอดได้ ($($vol.DriveType)) หยุดเพื่อความปลอดภัย" }
+    if ($vol.DriveType -ne 'Removable') { throw "Drive ${dl}: is not removable ($($vol.DriveType)). Refusing to copy." }
     # A failed directory listing is not evidence that the USB drive is empty.
     if (Get-ChildItem -LiteralPath "${dl}:\" -Force -ErrorAction Stop | Select-Object -First 1) {
-        throw "ไดรฟ์ ${dl}: ไม่ว่างเปล่า ย้ายหรือสำรองไฟล์ก่อน สคริปต์นี้ไม่ลบข้อมูลใน USB"
+        throw "Drive ${dl}: is not empty. Move or back up its files first; this script does not delete USB data."
     }
     if ($vol.FileSystem -eq 'FAT32' -and (Test-Path $finalWim) -and (Get-Item $finalWim).Length -gt $limitBytes) {
-        throw "ไดรฟ์ ${dl}: เป็น FAT32 แต่ install.wim เกิน 4 GB ให้รันด้วย -Split"
+        throw "Drive ${dl}: is FAT32 but install.wim exceeds 4 GB. Rerun with -Split."
     }
-    if ($PSCmdlet.ShouldProcess("${dl}:", 'คัดลอกชุดติดตั้ง')) {
+    if ($PSCmdlet.ShouldProcess("${dl}:", 'Copy installation media')) {
         Copy-Tree $WorkDir "${dl}:\"
-        Write-Host "คัดลอกไป ${dl}: แล้ว"
+        Write-Host "Copied installation media to ${dl}:"
     }
 }
 
-Write-Host "เสร็จ: $WorkDir มีเฉพาะรุ่น '$Edition'"
+Write-Host "Complete: $WorkDir contains only '$Edition'"

@@ -78,6 +78,30 @@ try {
                 Assert-True ((Get-Content -LiteralPath (Join-Path $source 'sources/install.esd') -Raw).Trim() -eq 'original fixture') 'Source must be preserved'
             }
         }
+        'native-copy-success' {
+            # Function mocks cannot reproduce PowerShell's handling of a native
+            # nonzero exit. Use real robocopy on Windows and a native shim on Unix.
+            Remove-Item -LiteralPath Function:\robocopy
+            if ([IO.Path]::DirectorySeparatorChar -eq '/') {
+                $nativeBin = Join-Path $testRoot 'native-bin'
+                New-Item -ItemType Directory -Path $nativeBin | Out-Null
+                $nativeCopy = Join-Path $nativeBin 'robocopy'
+                $nativeBody = @'
+#!/bin/sh
+cp -R "$1/." "$2/" || exit 8
+exit 1
+'@
+                Set-Content -LiteralPath $nativeCopy -Value $nativeBody -Encoding ASCII
+                & /bin/chmod +x $nativeCopy
+                if ($LASTEXITCODE -ne 0) { throw 'Cannot prepare native copy fixture' }
+                $env:PATH = $nativeBin + [IO.Path]::PathSeparator + $env:PATH
+            }
+            $PSNativeCommandUseErrorActionPreference = $true
+            & $testScript -Source $source -WorkDir $output -Edition $global:mediaTest.edition
+            Assert-True (Test-Path -LiteralPath (Join-Path $output 'sources/install.wim')) 'Native copy exit 1 must allow export to complete'
+            Assert-True ($global:mediaTest.exports -eq 1) 'Successful native copy must reach image export'
+            Assert-True ($PSNativeCommandUseErrorActionPreference -eq $true) 'Copy policy override must not change the caller preference'
+        }
         'nested-output' {
             Assert-Rejected { & $testScript -Source $source -WorkDir (Join-Path $source 'nested') } 'WorkDir'
             Assert-True ($global:mediaTest.copies -eq 0) 'Nested target must be rejected before robocopy'

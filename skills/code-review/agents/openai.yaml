@@ -1,4 +1,4 @@
 interface:
-  display_name: "ตรวจสอบโค้ด"
-  short_description: "ตรวจหาบั๊กและ regression พร้อมหลักฐานและผลกระทบ"
-  default_prompt: "ใช้ $code-review ตรวจโค้ดหรือ PR นี้ และรายงานบั๊กพร้อมตำแหน่ง ผลกระทบ และหลักฐาน"
+  display_name: "Code Review"
+  short_description: "Find actionable defects with triggers and evidence"
+  default_prompt: "Use $code-review to inspect this code or pull request and report supported defects with exact locations, triggers, impact, and verification evidence."

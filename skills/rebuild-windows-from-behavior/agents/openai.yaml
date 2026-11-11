@@ -1,4 +1,4 @@
 interface:
-  display_name: "สร้างโปรแกรม Windows จากพฤติกรรม"
-  short_description: "วิเคราะห์พฤติกรรมและเขียนโปรแกรม Windows ใหม่ไม่คัดลอก"
-  default_prompt: "ใช้ $rebuild-windows-from-behavior วิเคราะห์ภาษาและพฤติกรรมของโปรแกรม Windows นี้ แล้วสร้างใหม่จากข้อกำหนดที่ตรวจแล้ว ห้ามคัดลอกโค้ดต้นฉบับ พร้อมทดสอบและจัดโครงการพัฒนาต่อ"
+  display_name: "Rebuild Windows Behavior"
+  short_description: "Rebuild Windows behavior from an audited contract"
+  default_prompt: "Use $rebuild-windows-from-behavior to investigate this Windows application, specify evidenced behavior, independently implement the agreed scope without copying original code, and verify actual results."

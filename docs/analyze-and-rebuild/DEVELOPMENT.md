@@ -43,8 +43,8 @@ git switch -c improve/analyze-and-rebuild
 สำเนาใน GitHub กับสกิลส่วนตัวที่ติดตั้งไว้เป็นคนละสำเนา การแก้ใน GitHub ไม่อัปเดตตัวที่ติดตั้งให้อัตโนมัติ หลังแก้ไขให้สั่งอัปเดตสกิลจาก repository และ path ที่ระบุ เช่น:
 
 ```text
-อัปเดตสกิล analyze-and-rebuild จาก nal2awitname/codex-programming-skills
-ที่ path skills/analyze-and-rebuild แล้วตรวจสอบและบันทึกเวอร์ชันใหม่ให้ด้วย
+Update analyze-and-rebuild from nal2awitname/codex-programming-skills
+at path skills/analyze-and-rebuild; verify and record the installed version.
 ```
 
 เมื่อต้องการแก้เฉพาะสกิลที่ติดตั้ง ให้ระบุด้วยว่าต้องการบันทึกกลับ GitHub เพื่อให้ทั้งสองสำเนาตรงกัน

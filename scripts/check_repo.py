@@ -9,6 +9,34 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+CODE_SUFFIXES = {".py", ".ps1", ".psm1", ".cmd", ".bat", ".sh", ".bash", ".yaml", ".yml",
+                 ".json", ".toml", ".js", ".ts", ".tsx", ".jsx", ".c", ".h", ".cpp", ".cs"}
+SKIP_DIRS = {".git", "dist", "__pycache__", ".venv", "node_modules", ".pytest_cache"}
+
+
+def source_policy_errors(root: Path) -> list[str]:
+    """Keep executable/configuration sources and Markdown code blocks in English."""
+    errors = []
+    for path in sorted(root.rglob("*")):
+        if any(part in SKIP_DIRS for part in path.relative_to(root).parts):
+            continue
+        if not path.is_file() or path.suffix.lower() not in CODE_SUFFIXES | {".md"}:
+            continue
+        text = path.read_text(encoding="utf-8-sig")
+        fence = None
+        for number, line in enumerate(text.splitlines(), 1):
+            marker = re.match(r"^\s*(`{3,}|~{3,})", line) if path.suffix.lower() == ".md" else None
+            if marker:
+                token = marker[1]
+                if fence is None:
+                    fence = token
+                elif token[0] == fence[0] and len(token) >= len(fence):
+                    fence = None
+                continue
+            if (path.suffix.lower() != ".md" or fence) and any(0x0E00 <= ord(char) <= 0x0E7F for char in line):
+                errors.append(f"{path.relative_to(root)}:{number}: Thai text is not allowed in source/code blocks")
+    return errors
+
 SUITES = (
     ("tests", "test_*.py"),
     ("skills/analyze-and-rebuild/tests", "test_*.py"),
@@ -77,6 +105,7 @@ def _validate(root: Path) -> list[str]:
                 compile(script.read_bytes(), str(script), "exec")
             except (SyntaxError, ValueError) as exc:
                 errors.append(f"{script.relative_to(root)}: {exc}")
+    errors.extend(source_policy_errors(root))
     return errors
 
 
@@ -95,7 +124,7 @@ def main() -> int:
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
-    print("Skill metadata, local references, Python syntax and release versions: OK", flush=True)
+    print("Skill metadata, references, syntax, versions and English code policy: OK", flush=True)
     failed = False
     if args.test:
         for relative, pattern in SUITES:

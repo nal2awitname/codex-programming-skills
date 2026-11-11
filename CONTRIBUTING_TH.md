@@ -23,7 +23,7 @@ python -B scripts/check_repo.py --test
 | ARB workbench | `skills/analyze-and-rebuild/scripts/` | `python -B -m unittest discover -s skills/analyze-and-rebuild/tests -v` |
 | Windows behavior toolkit | `skills/rebuild-windows-from-behavior/scripts/` | `python -B -m unittest discover -s tests/rebuild-windows-from-behavior -v` |
 | Windows media script | `scripts/New-Win11ProMedia.ps1` | `python -B -m unittest discover -s tests/windows-media -v` |
-| Repository/release tooling | `scripts/check_repo.py`, `scripts/build_release.py` | `python -B -m unittest discover -s tests -v` |
+| Repository/release tooling | `scripts/check_repo.py`, `scripts/build_release.py`, `scripts/install_skills.py`, `scripts/verify_release.py` | `python -B -m unittest discover -s tests -v` |
 | ตัวอย่างโปรแกรม | `examples/<name>/` | รัน unittest จากโฟลเดอร์ตัวอย่างนั้น หรือใช้คำสั่งตรวจรวม |
 
 แก้บั๊กโดยเพิ่ม regression test ที่แสดงเงื่อนไขและพฤติกรรมที่ถูกต้อง ใส่คอมเมนต์ใกล้จุดแก้เมื่อสาเหตุไม่ชัดจากโค้ด เช่น ความต่างของ JSON error, การเลือก Python หลาย path หรือการตรวจความเก่าของหลักฐาน คอมเมนต์ควรอธิบายว่าเหตุใดต้องทำเช่นนี้ ไม่ทวนคำสั่งทีละบรรทัด
@@ -41,6 +41,7 @@ git diff --check
 
 ```sh
 python -B scripts/build_release.py --output-dir dist/review-build
+python -B scripts/verify_release.py --release-dir dist/review-build --smoke
 ```
 
 ปลายทางต้องเป็นโฟลเดอร์ใหม่ ZIP รวมเฉพาะไฟล์ที่ Git track และมี `SHA256SUMS` ไฟล์ source ใหม่ที่ยังไม่ track จะทำให้ build หยุด เพื่อป้องกันแพ็กเกจตกหล่น เปิด ZIP ตรวจจำนวนสกิลและทดลอง CLI จากไฟล์ที่แตกแล้ว
@@ -48,3 +49,6 @@ python -B scripts/build_release.py --output-dir dist/review-build
 CI ใน `.github/workflows/skills.yml` ตรวจ Ubuntu/Windows/macOS ด้วย Python 3.10/3.12 รวม GUI/launcher/installer บน Windows อ้างผลจาก commit ล่าสุดของ PR และตรวจ run บน `main` หลัง merge ด้วย หากแก้บั๊กเพิ่มหลัง CI ผ่าน ต้องตรวจ commit ใหม่ก่อนรวม
 
 เมื่อออกเวอร์ชันถัดไป อัปเดต `VERSION`, เลขเวอร์ชันของ toolkit ทั้งสอง, `CHANGELOG.md` และคู่มือที่เกี่ยวข้องให้ตรงกัน รักษา contract schema เดิมหากยังไม่มีเหตุผลและแผนย้ายข้อมูลสำหรับเปลี่ยน schema
+
+
+โค้ด คอมเมนต์ configuration metadata และ fenced code blocks ต้องไม่มีภาษาไทย ใส่คำอธิบายภาษาไทยเป็น prose ในเอกสารภายนอกแทน ตัวตรวจ `check_repo.py` บังคับนโยบายนี้ด้วย ZIP รุ่น 2.2.0 แยกทั้ง source และรายสกิล พร้อม manifest/hash; `--smoke` ทดสอบการติดตั้งและเรียก runtime จากแพ็กเกจที่แตกแล้วโดยตรง

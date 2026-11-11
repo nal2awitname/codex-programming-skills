@@ -10,7 +10,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from arbkit.common import digest, parse_json, read_json, write_json
+from arbkit.common import digest, file_hash, parse_json, read_json, write_json
 from arbkit.inventory import scan
 from arbkit.runner import comparable, execute, run, verification_current
 from arbkit.reporting import report
@@ -224,6 +224,24 @@ class WorkbenchTests(unittest.TestCase):
         record = read_json(self.work / "analyst/verification.json")
         self.assertTrue(verification_current(self.work, record))
         (self.source / "main.py").write_text("print('new reference')\n", encoding="utf-8")
+        self.assertFalse(verification_current(self.work, record))
+
+    def test_command_file_change_during_capture_cannot_be_marked_current(self):
+        self.prepare()
+        rebuilt = self.base / "rebuilt"
+        rebuilt.mkdir()
+        command = self.base / "rebuilt-command.json"
+        replacement = {"argv": [sys.executable, "-B", "-c", "print('{}')"], "cwd": str(rebuilt)}
+        (rebuilt / "app.py").write_text(
+            "import json, sys\nfrom pathlib import Path\n"
+            f"Path({str(command)!r}).write_text({json.dumps(replacement)!r}, encoding='utf-8')\n"
+            "print(json.dumps({'sum': sum(json.loads(sys.stdin.read()))}))\n", encoding="utf-8")
+        write_json(command, {"argv": [sys.executable, "-B", "app.py"], "cwd": str(rebuilt)})
+        original_hash = file_hash(command)
+        self.assertTrue(execute(self.work, command, "verify")["success"])
+        record = read_json(self.work / "analyst/verification.json")
+        self.assertEqual(record["command_file_sha256"], original_hash)
+        self.assertNotEqual(record["command_file_sha256"], file_hash(command))
         self.assertFalse(verification_current(self.work, record))
 
     def test_symlinks_skips_limits_and_nested_work(self):

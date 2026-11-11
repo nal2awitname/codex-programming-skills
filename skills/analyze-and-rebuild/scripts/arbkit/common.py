@@ -22,6 +22,8 @@ def file_hash(path):
 def _pairs(items):
     result = {}
     for key, value in items:
+        # json.loads normally keeps only the last duplicate value, which could
+        # make an ambiguous response appear to match the expected result.
         if key in result:
             raise ValueError("duplicate JSON key: " + key)
         result[key] = value
@@ -29,10 +31,12 @@ def _pairs(items):
 
 
 def parse_json(text):
-    """Decode unambiguous JSON that can be hashed without loss or infinities."""
+    """Decode JSON without duplicate keys or non-finite floating-point values."""
     def bad_constant(value):
         raise ValueError("non-finite JSON value: " + value)
     def finite_float(value):
+        # parse_constant catches Infinity/NaN tokens, but not a valid JSON
+        # exponent such as 1e400 that overflows Python's floating-point range.
         number = float(value)
         if not math.isfinite(number):
             raise ValueError("non-finite JSON number: " + value)

@@ -77,6 +77,9 @@ def run(command, stdin, timeout=10, limit=1024 * 1024):
         proc.wait(timeout=6)
     # Do not leave probe descendants keeping capture streams open.
     for thread in threads: thread.join(timeout=0.1)
+    # A parent may exit successfully while its children still own these pipes.
+    # Killing those children can unblock readers, but cannot complete capture;
+    # preserve that fact before cleanup rather than checking threads afterward.
     capture_incomplete = any(thread.is_alive() for thread in threads)
     if capture_incomplete:
         stop()
@@ -108,6 +111,9 @@ def execute(work, command_file, action, timeout=10, limit=1024 * 1024):
         raise ValueError("execution action must be observe or verify")
     work, meta, index = unchanged(work)
     cases = load_cases(work)
+    # Hash before running: a probe may rewrite its command file. Hashing it
+    # afterward would incorrectly bind old results to the replacement command.
+    command_file_sha256 = file_hash(command_file)
     command = load_command(command_file)
     contract = load_contract(work) if action == "verify" else None
     if action == "verify":
@@ -129,6 +135,8 @@ def execute(work, command_file, action, timeout=10, limit=1024 * 1024):
     observations_path = work / "analyst/observations.json"
     observations_sha256 = None
     if action == "verify" and observations_path.exists():
+        # Source/case IDs alone do not detect edits to the captured oracle.
+        # Retain the exact observation bytes used for this verification.
         observations_sha256 = file_hash(observations_path)
         observed = read_json(observations_path)
         if observed.get("cases_digest") != digest(cases) or observed.get("source_fingerprint") != index["fingerprint"]:
@@ -158,7 +166,7 @@ def execute(work, command_file, action, timeout=10, limit=1024 * 1024):
         results.append(row)
     record = {"schema_version": 2, "cases_digest": digest(cases),
               "source_fingerprint": index["fingerprint"], "command": command,
-              "command_file_sha256": file_hash(command_file), "results": results}
+              "command_file_sha256": command_file_sha256, "results": results}
     if action == "verify":
         record["contract_digest"] = digest(contract)
         record["rebuilt_fingerprint"] = scan(command["cwd"])["fingerprint"]
@@ -178,6 +186,8 @@ def execute(work, command_file, action, timeout=10, limit=1024 * 1024):
 
 def verification_current(work, record):
     try:
+        # Re-scan the source as well as the rebuild: a matching contract does
+        # not make results current after the reference program has changed.
         work, _, index = unchanged(work)
         observations_path = work / "analyst/observations.json"
         observations_sha256 = file_hash(observations_path) if observations_path.exists() else None

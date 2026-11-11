@@ -1,5 +1,6 @@
 ﻿#Requires -Version 5.1
 #Requires -RunAsAdministrator
+# Keep the UTF-8 BOM: Windows PowerShell 5.1 otherwise reads Thai as ANSI.
 <#
 .SYNOPSIS
 สร้างชุดติดตั้ง Windows 11 ที่มีเฉพาะรุ่น Pro (Build a Windows 11 installer containing only the Pro edition).
@@ -48,6 +49,7 @@ $limitBytes = 4GB - 1MB
 
 function Copy-Tree([string]$From, [string]$To) {
     New-Item -ItemType Directory -Path $To -Force | Out-Null
+    # Following source junctions could copy unrelated trees or recurse indefinitely.
     robocopy $From $To /E /XJ /R:2 /W:2 /NFL /NDL /NJH /NJS /NP | Out-Null
     if ($LASTEXITCODE -ge 8) { throw "robocopy ล้มเหลว (exit $LASTEXITCODE) จาก $From ไป $To" }
 }
@@ -109,11 +111,13 @@ try {
     Write-Host "คัดลอกไฟล์ติดตั้งจาก $srcRoot ..."
     Copy-Tree $srcRoot $WorkDir
 } finally {
+    # An ISO mounted before this run belongs to the user; do not unmount it.
     if ($mountedByScript) { Dismount-DiskImage -ImagePath $mounted.ImagePath | Out-Null }
 }
 
 # 2) หา index ของรุ่นที่ต้องการ (ชื่อตรงตัว ไม่เอา Pro N / Pro Education ฯลฯ)
 $sources = Join-Path $WorkDir 'sources'
+# Picking the first image would leave the other edition container on the media.
 $sourceImages = @(@('install.wim', 'install.esd') |
     ForEach-Object { Join-Path $sources $_ } | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
 if ($sourceImages.Count -ne 1) { throw 'ต้องมี sources\install.wim หรือ install.esd เพียงไฟล์เดียว' }
@@ -130,6 +134,7 @@ Write-Host "พบ '$Edition' ที่ index $index"
 
 # 3) ส่งออกเฉพาะรุ่นนั้นเป็น WIM ใหม่ แล้วแทนที่ไฟล์เดิม
 $newWim = Join-Path $sources 'install_single.wim'
+# Export-WindowsImage appends to an existing WIM instead of replacing it.
 if (Test-Path -LiteralPath $newWim) { throw 'มี install_single.wim อยู่แล้ว หยุดเพื่อไม่ส่งออกต่อท้ายอิมเมจเดิม' }
 Write-Host 'กำลังส่งออกอิมเมจ (ใช้เวลาหลายนาที) ...'
 Export-WindowsImage -SourceImagePath $srcImage -SourceIndex $index `
@@ -141,6 +146,7 @@ if ($check.Count -ne 1 -or $check[0].ImageName -ne $Edition) {
 }
 $imageArchitecture = $null
 if (-not $SkipAutounattend) {
+    # Setup ignores settings for a different architecture; amd64 is not universal.
     $detail = Get-WindowsImage -ImagePath $newWim -Index 1
     $imageArchitecture = switch ([string]$detail.Architecture) {
         '0' { 'x86' }
@@ -207,6 +213,7 @@ if ($UsbDrive) {
     $dl = $UsbDrive.TrimEnd(':', '\').ToUpper()
     $vol = Get-Volume -DriveLetter $dl -ErrorAction Stop
     if ($vol.DriveType -ne 'Removable') { throw "ไดรฟ์ ${dl}: ไม่ใช่ไดรฟ์ถอดได้ ($($vol.DriveType)) หยุดเพื่อความปลอดภัย" }
+    # A failed directory listing is not evidence that the USB drive is empty.
     if (Get-ChildItem -LiteralPath "${dl}:\" -Force -ErrorAction Stop | Select-Object -First 1) {
         throw "ไดรฟ์ ${dl}: ไม่ว่างเปล่า ย้ายหรือสำรองไฟล์ก่อน สคริปต์นี้ไม่ลบข้อมูลใน USB"
     }

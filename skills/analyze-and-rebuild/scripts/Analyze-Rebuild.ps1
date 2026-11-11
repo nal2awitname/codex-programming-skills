@@ -25,7 +25,8 @@ $pythonCommand = $null
 $prefix = @()
 foreach ($candidate in @('py', 'python', 'python3')) {
     # Get-Command may return several executables from PATH. Invoke each scalar
-    # path; passing the whole .Source array to & is not a valid command.
+    # path; passing the whole .Source array to & throws and previously made
+    # machines with Python installed report that no suitable Python existed.
     $applications = @(Get-Command $candidate -CommandType Application -ErrorAction SilentlyContinue)
     foreach ($application in $applications) {
         $probePrefix = @()

@@ -340,6 +340,26 @@ class WorkbenchTests(unittest.TestCase):
         records = read_json(self.work / "analyst/observations.json")["results"]
         self.assertTrue(all(row["output_limited"] and not row["valid"] for row in records))
 
+    @unittest.skipUnless(shutil.which("pwsh") and os.name != "nt",
+                         "regression uses POSIX executable symlinks and PowerShell")
+    def test_powershell_wrapper_resolves_multiple_python_path_matches(self):
+        executable = shutil.which("pwsh")
+        wrapper = Path(__file__).parents[1] / "scripts/Analyze-Rebuild.ps1"
+        python_paths = []
+        for name in ["python-one", "python-two"]:
+            directory = self.base / name
+            directory.mkdir()
+            (directory / "python").symlink_to(sys.executable)
+            python_paths.append(str(directory))
+        environment = dict(os.environ, PATH=os.pathsep.join(python_paths))
+        initialized = subprocess.run([executable, "-NoLogo", "-NoProfile", "-NonInteractive",
+            "-File", str(wrapper), "-Action", "init", "-Source", str(self.source),
+            "-Work", str(self.work), "-MaxFiles", "12", "-MaxBytes", "4096"],
+            capture_output=True, env=environment, timeout=30)
+        self.assertEqual(initialized.returncode, 0, initialized.stderr)
+        inventory = read_json(self.work / "analyst/inventory.json")
+        self.assertEqual(inventory["limits"], {"max_files": 12, "max_bytes": 4096})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,17 +13,18 @@ python -B scripts/check_repo.py --test
 | ชุดทดสอบ | จำนวน | ผล |
 | --- | ---: | --- |
 | Repository/release tools | 7 | ผ่านทั้งหมด |
-| ARB workbench | 26 | ผ่านทั้งหมด รวม PowerShell parser/wrapper |
+| ARB workbench | 27 | ผ่านทั้งหมด รวม PowerShell parser/wrapper |
 | Windows behavior toolkit | 38 | ผ่านทั้งหมด รวม PowerShell wrapper |
 | Windows media script | 2 | ผ่านทั้งหมด รวม 8 สถานการณ์ mock |
 | RangeTotals example | 10 | ผ่านทั้งหมด |
 | ValueScanLab example | 52 | ผ่าน 51; ข้าม Windows GUI 1 |
-| รวม | 135 | ผ่าน 134; ข้าม 1; ไม่พบ test failure |
+| รวม | 136 | ผ่าน 135; ข้าม 1; ไม่พบ test failure |
 
 ตรวจ metadata/ชื่อสกิล ลิงก์อ้างอิงภายในสกิล syntax Python และเลขเวอร์ชันทั้งสอง toolkit ผ่าน `git diff --check` ผ่าน ตรวจ release ZIP สองครั้งจาก source bytes เดียวกันให้ SHA-256 ตรงกันและไม่มีไฟล์ untracked รวมอยู่ ทดสอบเปิด `--help`/`--version` จากสกิลที่แตก ZIP แล้วได้ และตัวอย่าง ValueScanLab `--demo` รันสำเร็จ
 
 ## ปัญหาที่แก้พร้อม regression tests
 
+- ARB PowerShell wrapper: รองรับหลาย Python executable ใน PATH โดยตรวจทีละ executable แทนการเรียก array ของ paths ซึ่งล้มบน CI ที่มี Python หลายตัว
 - ARB: JSON key ซ้ำและตัวเลข infinity/overflow เคยทำให้เปรียบเทียบผลที่กำกวมได้; ผลจับข้อมูลที่จบเพราะหยุดโปรเซสลูกต้องถือว่าไม่ครบ; ผล verify ต้องหมดอายุเมื่อ observations หรือต้นฉบับเปลี่ยน
 - Windows toolkit: JSONL ที่ record สุดท้ายไม่มี newline ทำให้ record ใหม่ต่อกันจนเสีย; Unicode line separator ภายใน string ต้องไม่ถูกแยกเป็น record ใหม่
 - ValueScanLab: จำนวนเต็มที่เกินขีดจำกัด Python ต้องคืน error JSON ตามรูปแบบ CLI แทน traceback
@@ -32,8 +33,14 @@ python -B scripts/check_repo.py --test
 
 ## ข้อจำกัดและการตรวจต่อ
 
-ยังไม่ได้รัน GUI Windows, DISM, mount ISO จริง หรือเขียน USB จริงในสภาพแวดล้อมนี้ การทดสอบ media ใช้ PowerShell 7 กับ Windows command mocks; การเพิ่ม BOM ช่วยการอ่าน source ใน PowerShell 5.1 แต่ไม่ใช่ผลยืนยันการทำงานทั้งหมดบน 5.1
+การรัน local ไม่ได้ทดสอบ GUI Windows, DISM, mount ISO จริง หรือเขียน USB จริง การทดสอบ media ใช้ PowerShell 7 กับ Windows command mocks; การเพิ่ม BOM ช่วยการอ่าน source ใน PowerShell 5.1 แต่ไม่ใช่ผลยืนยันการทำงานทั้งหมดบน 5.1
 
 CI ใหม่ตั้งให้ตรวจ Ubuntu/Windows/macOS ด้วย Python 3.10/3.12 รวม Windows GUI, launcher และ installer และเก็บ ZIP/checksum เป็น artifact ผล CI ต้องตรวจจาก run ของ commit ที่ส่งขึ้นจริง เอกสารนี้บันทึกผล local ข้างต้น ไม่อ้างว่า matrix ผ่านแล้ว
 
 รูปแบบ contract ไม่เปลี่ยน: ARB schema 2 และ Windows toolkit schema 1 แยกกัน ผู้ใช้ workspace ARB เดิมควรรัน `verify` อีกครั้งเพื่อบันทึก hash ของ observations รุ่นนี้ไม่รับรองความเทียบเท่าของโปรแกรมเป้าหมายใดจากการผ่าน tests ของ toolkit
+
+## การตรวจ GitHub Actions เพิ่มเติม
+
+[CI รอบแรก](https://github.com/nal2awitname/codex-programming-skills/actions/runs/42948247752) ยืนยัน Windows/Python 3.10 และ 3.12 ผ่าน รวม GUI จริงของ ValueScanLab, CMD launcher และการติดตั้งแบบ WhatIf/ไม่เขียนทับ แต่พบปัญหาบน Ubuntu/macOS เมื่อ PATH มี Python หลายตัว และ media fixture บน macOS ใช้ `/var` ที่เป็น symlink
+
+แก้ resolver ให้ตรวจ Python ทีละ executable พร้อม regression test และเปลี่ยนเฉพาะ fixture ให้ใช้ physical temp path โดยรักษาการป้องกัน reparse ของ production script ผล CI ล่าสุดให้ตรวจจาก [PR #1](https://github.com/nal2awitname/codex-programming-skills/pull/1) ตาม commit สุดท้าย

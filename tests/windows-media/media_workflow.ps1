@@ -2,6 +2,18 @@ param([Parameter(Mandatory)][string]$ScriptPath, [Parameter(Mandatory)][string]$
 $ErrorActionPreference = 'Stop'
 $testRoot = Join-Path ([IO.Path]::GetTempPath()) ('media-test-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $testRoot | Out-Null
+# macOS exposes its temporary directory through /var -> /private/var. Keep
+# fixtures on the physical path so production reparse checks still run intact.
+if ([IO.Path]::DirectorySeparatorChar -eq '/') {
+    Push-Location -LiteralPath $testRoot
+    try {
+        $physicalRoot = & /bin/pwd -P
+        if ($LASTEXITCODE -ne 0 -or -not $physicalRoot) { throw 'Cannot resolve physical fixture path' }
+        $testRoot = [string]$physicalRoot
+    } finally {
+        Pop-Location
+    }
+}
 $source = Join-Path $testRoot 'source'
 $output = Join-Path $testRoot 'output'
 New-Item -ItemType Directory -Path (Join-Path $source 'sources') -Force | Out-Null

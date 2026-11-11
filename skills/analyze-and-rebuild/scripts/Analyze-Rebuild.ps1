@@ -24,19 +24,22 @@ $ErrorActionPreference = 'Stop'
 $pythonCommand = $null
 $prefix = @()
 foreach ($candidate in @('py', 'python', 'python3')) {
-    $found = Get-Command $candidate -CommandType Application -ErrorAction SilentlyContinue
-    if ($found) {
+    # Get-Command may return several executables from PATH. Invoke each scalar
+    # path; passing the whole .Source array to & is not a valid command.
+    $applications = @(Get-Command $candidate -CommandType Application -ErrorAction SilentlyContinue)
+    foreach ($application in $applications) {
         $probePrefix = @()
         if ($candidate -eq 'py') { $probePrefix = @('-3') }
         try {
-            & $found.Source @probePrefix -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>$null
+            & $application.Source @probePrefix -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>$null
         } catch { continue }
         if ($LASTEXITCODE -eq 0) {
-            $pythonCommand = $found.Source
+            $pythonCommand = $application.Source
             $prefix = $probePrefix
             break
         }
     }
+    if ($pythonCommand) { break }
 }
 if (-not $pythonCommand) { throw 'Python 3.10 or newer is required.' }
 $arguments = @((Join-Path $PSScriptRoot 'arb.py'), $Action, '--work', $Work)

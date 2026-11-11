@@ -12,6 +12,7 @@
 
 ### Usability and maintenance
 
+- ARB PowerShell interpreter discovery handles multiple executables in PATH instead of attempting to invoke an array of paths; media fixtures resolve physical temporary paths on macOS.
 - ARB PowerShell wrapper exposes evidence/attach commands and inventory/output limits; repeated handoff whitespace normalization is computed once.
 - Skill instructions load references by task and avoid creating full reconstruction records for focused analysis. Windows simulation guidance distinguishes PowerShell runtime, virtualization and emulation.
 - Adds repository-wide validation/test runner, reproducible source ZIP packaging and SHA-256 checksums. All six skills are listed in the Thai installation guide.

@@ -88,7 +88,7 @@
 | DRM-122 | 1.2.0 | ตัวจัดการเหตุการณ์ของหน้าต่างตั้งชื่อพารามิเตอร์ `$sender` (ตัวแปรอัตโนมัติ) | ใช้ `$args[1]` + PSScriptAnalyzer |
 | DRM-123 | 1.2.0 | ลงทะเบียน winget ใหม่ล้มเหลวโดยไม่บอกสาเหตุ | แนบ exit code/ข้อความลงรายละเอียด |
 | DRM-124 | 1.2.0 | `Get-DrmUninstallEntries` อ่านเฉพาะ HKCU ของบัญชีที่ยกระดับ ไม่เห็นโปรแกรมแบบต่อผู้ใช้ของผู้ใช้ที่ล็อกอิน | อ่าน Uninstall ของ hive ผู้ใช้ที่ล็อกอินเพิ่ม (ใช้ `Get-DrmUserRegistryPath` เดียวกับ DRM-109) |
-| DRM-127 | 1.2.0 | การค้นหา Windows Update ไม่มีเวลาหมด และโหมดทดลองค้นหาออนไลน์ใหม่โดยไม่จำเป็น — ทำให้ Pester บน PowerShell 7 ใน CI ค้างจนหมดเวลา 15 นาที 2 ครั้ง (ไม่ใช่ปัญหาของ runner อย่างที่เคยสันนิษฐาน) | `Invoke-DrmWuSearcher` (BeginSearch + เวลาหมด 15 นาที + ปุ่มหยุด, ใช้แบบรอจนจบเมื่อ async ใช้ไม่ได้), ข้ามการค้นหาในโหมดทดลอง; Pester + CI ตรวจว่าการค้นหาสำเร็จจริง |
+| DRM-127 | 1.2.0 | การค้นหา Windows Update ไม่มีเวลาหมด และโหมดทดลองค้นหาออนไลน์ใหม่โดยไม่จำเป็น — ทำให้ Pester บน PowerShell 7 ใน CI ค้างจนหมดเวลา 15 นาที 2 ครั้ง (ไม่ใช่ปัญหาของ runner อย่างที่เคยสันนิษฐาน) | `Invoke-DrmWuSearcher` (BeginSearch พร้อมตัวรับการแจ้ง `ISearchCompletedCallback` จาก C# + เวลาหมด 15 นาที + ปุ่มหยุด, ใช้แบบรอจนจบเมื่อ async ใช้ไม่ได้), ข้ามการค้นหาในโหมดทดลอง; Pester + CI ตรวจว่าการค้นหาสำเร็จจริงผ่านทาง async (`[wu-search:async]`) |
 
 ## กับดักของ PowerShell ที่พบในโครงการนี้
 
@@ -106,6 +106,8 @@
 - `Set-ItemProperty -Type` เป็นพารามิเตอร์ของ registry provider เท่านั้น — เขียนรีจิสทรีผ่าน `Set-DrmRegistryValue` เพื่อ mock ใน Pester ได้ทุกแพลตฟอร์ม
 - Pester: ฟังก์ชันที่ถูกเรียกจากในโมดูลต้อง mock ด้วย `-ModuleName DriverRuntimeManager`
 - `-eq`/`-in` ไม่สนตัวพิมพ์ — ตั้งใจใช้กับ System ID ของ HP และชื่อแอตทริบิวต์ XML
+- `IUpdateSearcher.BeginSearch($c, $null, $null)` ล้มด้วย "Object reference not set" ทั้ง PowerShell 5.1 และ 7 — ต้องส่งออบเจกต์ที่ implement `ISearchCompletedCallback` (`Get-DrmWuCallback`)
+- สคริปต์ inline ใน workflow ที่รันด้วย Windows PowerShell 5.1 ถูกอ่านเป็น ANSI — อย่าใส่ภาษาไทยใน regex ของขั้น CI (ใช้ป้าย ASCII ใน log เช่น `[wu-search:async]`)
 - ฟังก์ชันที่คืนรายการห้าม `return $null` เมื่อล้มเหลว — `@($null).Count` เป็น 1 ทำให้ซ่อนข้อผิดพลาดจริง (พบใน CI ระหว่างแก้ DRM-119) ให้ `return` เปล่า
 - `expand.exe <cab> -F:* <dir>` ไม่ยอมแตกลงโฟลเดอร์เดียวกับไฟล์ .cab ("Cannot expand a file onto itself") และกับ cab ไฟล์เดียวบางไฟล์จะตั้งชื่อผลลัพธ์ตามชื่อ .cab — แตกลงโฟลเดอร์ย่อยและระบุชื่อไฟล์ปลายทางเอง
 

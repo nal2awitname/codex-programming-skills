@@ -1660,13 +1660,40 @@ $script:ComparisonText = @{
     Unknown = 'เทียบไม่ได้'; NoDevice = 'ไม่พบอุปกรณ์ที่ตรงกันตอนนี้'
 }
 
+function Get-DrmWuCallback {
+    <# DRM-127: BeginSearch ของ Windows Update Agent ต้องได้ออบเจกต์ ISearchCompletedCallback จริง (ส่ง $null แล้วล้มทั้ง PowerShell 5.1 และ 7 ใน CI)
+       คลาส C# นี้แค่รับการแจ้งว่าค้นหาเสร็จ — โปรแกรมยังตรวจ IsCompleted เองเพื่อจับเวลาหมดและปุ่มหยุด #>
+    if (-not ('DrmWu.SearchCallback' -as [type])) {
+        try {
+            Add-Type -ErrorAction Stop -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+namespace DrmWu {
+    [ComImport, Guid("88AEE058-D4B0-4725-A2F1-814A67AE964C"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface ISearchCompletedCallback { [PreserveSig] int Invoke(IntPtr searchJob, IntPtr callbackArgs); }
+    [ComVisible(true)]
+    public sealed class SearchCallback : ISearchCompletedCallback {
+        public volatile bool Completed;
+        public int Invoke(IntPtr searchJob, IntPtr callbackArgs) { Completed = true; return 0; }
+    }
+}
+'@
+        } catch { Write-DrmLog ("สร้างตัวรับการแจ้งของ Windows Update ไม่ได้: {0}" -f $_.Exception.Message) -Level Debug; return }
+    }
+    try { return (New-Object DrmWu.SearchCallback) } catch { return }
+}
+
 function Invoke-DrmWuSearcher {
-    <# DRM-127: ค้นหาแบบ asynchronous พร้อมเวลาหมดและปุ่มหยุด — ถ้า BeginSearch ใช้ไม่ได้ ค่อยใช้ Search แบบรอจนจบ #>
+    <# DRM-127: ค้นหาแบบ asynchronous พร้อมเวลาหมดและปุ่มหยุด — ถ้า BeginSearch ใช้ไม่ได้ ค่อยใช้ Search แบบรอจนจบ
+       log มีป้าย [wu-search:async] หรือ [wu-search:sync] (ASCII ให้ CI ตรวจได้ทุกรุ่นของ PowerShell) #>
     param([Parameter(Mandatory)]$Searcher, [Parameter(Mandatory)][string]$Criteria, [int]$TimeoutMinutes = 15)
     $job = $null
-    try { $job = $Searcher.BeginSearch($Criteria, $null, $null) }
-    catch { Write-DrmLog ("ค้นหาแบบ asynchronous ไม่ได้ ({0}) — ใช้แบบรอจนจบ" -f $_.Exception.Message) -Level Debug }
+    $cb = Get-DrmWuCallback
+    if (-not $cb) { $cb = 'DriverRuntimeManager' }
+    try { $job = $Searcher.BeginSearch($Criteria, $cb, 'DriverRuntimeManager') }
+    catch { Write-DrmLog ("[wu-search:sync] ค้นหาแบบ asynchronous ไม่ได้ ({0}) — ใช้แบบรอจนจบ ไม่มีเวลาหมด" -f $_.Exception.Message) -Level Debug }
     if (-not $job) { return $Searcher.Search($Criteria) }
+    Write-DrmLog ("[wu-search:async] ค้นหาแบบ asynchronous เวลาหมด {0} นาที" -f $TimeoutMinutes) -Level Debug
     $sw = [Diagnostics.Stopwatch]::StartNew()
     $lastNote = 0
     while (-not $job.IsCompleted) {
@@ -1681,7 +1708,7 @@ function Invoke-DrmWuSearcher {
     try { return $Searcher.EndSearch($job) }
     catch {
         # ผลของงาน asynchronous อ่านไม่ได้ (บางรุ่นของ Windows) → ค้นหาแบบรอจนจบหนึ่งครั้ง
-        Write-DrmLog ("อ่านผลการค้นหาแบบ asynchronous ไม่ได้ ({0}) — ค้นหาใหม่แบบรอจนจบ" -f $_.Exception.Message) -Level Debug
+        Write-DrmLog ("[wu-search:sync] อ่านผลการค้นหาแบบ asynchronous ไม่ได้ ({0}) — ค้นหาใหม่แบบรอจนจบ" -f $_.Exception.Message) -Level Debug
         return $Searcher.Search($Criteria)
     }
 }

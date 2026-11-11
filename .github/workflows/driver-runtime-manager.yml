@@ -143,11 +143,13 @@ jobs:
           & $exe -NoProfile -ExecutionPolicy Bypass -File scripts/DriverRuntimeManager.ps1 -Mode Scan -CheckUpdates -NoElevate -Root "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\scan"
           if ($LASTEXITCODE -ne 0) { throw "Scan failed ($LASTEXITCODE)" }
           if (-not (Get-ChildItem "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\scan\Reports" -Filter *.html)) { throw 'No HTML report' }
-          # การค้นหา Windows Update ต้องสำเร็จจริง (DRM-127: แบบ asynchronous + เวลาหมด) ไม่ใช่แค่ไม่ล้ม
+          # Windows Update search must really finish, through the asynchronous path that has a timeout (DRM-127).
+          # ASCII-only patterns: Windows PowerShell 5.1 reads this inline script as ANSI, so Thai literals here never match.
           $log = Get-ChildItem "$env:RUNNER_TEMP\drm-${{ matrix.shell }}\scan\Logs" -Filter 'DRM_*.log' | Sort-Object LastWriteTime | Select-Object -Last 1
           $text = Get-Content $log.FullName -Raw -Encoding UTF8
-          ($text -split "`n" | Select-String -Pattern 'Windows Update|asynchronous|cert|แคช') | ForEach-Object { Write-Host $_.Line.Trim() }
-          if ($text -notmatch 'Windows Update เสนอไดรเวอร์ \d+ รายการ') { throw 'Windows Update search did not complete' }
+          ($text -split "`n" | Select-String -Pattern 'Windows Update|wu-search|asynchronous') | ForEach-Object { Write-Host $_.Line.Trim() }
+          if ($text -notmatch '\[OK\s+\] Windows Update ') { throw 'Windows Update search did not complete' }
+          if ($text -notmatch '\[wu-search:async\]' -or $text -match '\[wu-search:sync\]') { throw 'Windows Update search did not use the asynchronous path with a timeout' }
       - name: Dry run of every item in the correct order
         timeout-minutes: 25
         run: |

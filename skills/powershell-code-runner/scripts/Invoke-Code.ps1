@@ -300,6 +300,28 @@ function New-NativeProcess {
     return $process
 }
 
+function Start-ChildProcess {
+    # .NET Framework writes the console input encoding's byte order mark into a redirected
+    # stdin pipe as soon as the process starts; with code page 65001 the program would read
+    # a stray U+FEFF. A BOM-less UTF-8 object for the same code page avoids it.
+    param([System.Diagnostics.Process] $Process)
+    $saved = $null
+    if ($Process.StartInfo.RedirectStandardInput -and -not $script:IsCore) {
+        try {
+            $current = [Console]::InputEncoding
+            if ($current.GetPreamble().Length -gt 0 -and $current.CodePage -eq 65001) {
+                $saved = $current
+                [Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
+            }
+        } catch { $saved = $null }
+    }
+    try {
+        [void]$Process.Start()
+    } finally {
+        if ($null -ne $saved) { try { [Console]::InputEncoding = $saved } catch { $null = $_ } }
+    }
+}
+
 function Stop-ProcessTree {
     param([System.Diagnostics.Process] $Process)
     try {
@@ -311,7 +333,7 @@ function Stop-ProcessTree {
             $taskkill = Join-Path $env:SystemRoot 'System32\taskkill.exe'
             $killer = New-NativeProcess -FilePath $taskkill -ArgumentList @('/PID', [string]$Process.Id, '/T', '/F') `
                 -WorkingDirectory $env:SystemRoot -Capture
-            [void]$killer.Start()
+            Start-ChildProcess $killer
             $killer.StandardInput.Close()
             [void]$killer.WaitForExit(10000)
             $killer.Dispose()
@@ -330,7 +352,7 @@ function Invoke-Captured {
     if (-not $WorkingDirectory) { $WorkingDirectory = $script:StartDirectory }
     $process = New-NativeProcess -FilePath $FilePath -ArgumentList $ArgumentList -WorkingDirectory $WorkingDirectory -Capture
     try {
-        [void]$process.Start()
+        Start-ChildProcess $process
         $process.StandardInput.Close()
         $stdout = $process.StandardOutput.ReadToEndAsync()
         $stderr = $process.StandardError.ReadToEndAsync()
@@ -366,7 +388,7 @@ function Invoke-Interactive {
     $inputClosed = $true
     try {
         try {
-            [void]$process.Start()
+            Start-ChildProcess $process
         } catch {
             throw (New-RunnerError 69 ("Cannot start '$FilePath': " + $_.Exception.Message))
         }

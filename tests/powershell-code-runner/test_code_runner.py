@@ -117,14 +117,15 @@ class RunnerBehaviorTests(unittest.TestCase):
                 self.assertEqual(out.strip(), "['-v', '--help', '-Plan']")
 
     def test_input_file_timeout_and_working_directory_option(self):
-        data = self.write("input.txt", "first\nsecond\n")
+        # Windows PowerShell 5.1 once leaked a UTF-8 BOM into redirected stdin; non-ASCII must arrive intact.
+        data = self.write("input.txt", "first\nsecond\n" + THAI + "\n")
         for shell in SHELLS:
             with self.subTest(shell=shell):
                 code, out, err = run(shell, "-Quiet", "-InputFile", data, "-WorkingDirectory", self.base, "-Language", "py",
                                      "-Code", "import os, sys; print(sys.stdin.read().upper().strip()); print(os.getcwd())",
                                      cwd=self.work, env=self.env)
                 self.assertEqual(code, 0, err)
-                self.assertEqual(out.strip().splitlines(), ["FIRST", "SECOND", str(self.base)])
+                self.assertEqual(out.strip().splitlines(), ["FIRST", "SECOND", THAI, str(self.base)])
                 started = time.monotonic()
                 code, out, err = run(shell, "-TimeoutSeconds", "2", "-Language", "python", "-Code",
                                      "import time; time.sleep(60)", cwd=self.work, env=self.env)

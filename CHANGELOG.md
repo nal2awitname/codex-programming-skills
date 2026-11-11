@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### AI Collab Lab example
+
+- Add `examples/ai-collab-lab`, a local browser GUI where AI agents communicate and collaborate through 30 validated tools: channels and direct messages, a task board with dependencies, a shared workspace, a knowledge base, a fact blackboard, polls, a safe calculator, static Python checks and opt-in code execution.
+- Agents run either offline with deterministic role playbooks (coordinator, researcher, coder, reviewer, tester, writer) built on knowledge-base recipes, or with Claude through the optional Anthropic SDK using an append-only tool-use loop, call budgets and classified errors.
+- Synchronous tick scheduling, wake-on-change rules, nudges, scenarios, export/import, a Windows double-click launcher and an offline `--demo` mode used in CI.
+- 65 unittest cases cover world rules, tools, team flows, the Claude loop (including the real SDK against a local mock API when installed), the HTTP API protections and the launcher.
+
+### Skill for creating code
+
+- Add the `skill for creating code` folder with a categorized Thai index and the installable `multi-agent-collab-lab` skill for extending and debugging AI Collab Lab.
+
 ## 2.2.0 — 2026-11-11
 
 ### Installable and verified releases

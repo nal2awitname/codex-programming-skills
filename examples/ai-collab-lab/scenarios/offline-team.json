@@ -1,0 +1,48 @@
+{
+  "name": "Offline team (no API key)",
+  "description": "Six scripted agents that plan, research, code, review, test and document using knowledge-base recipes.",
+  "agents": [
+    {
+      "id": "nova",
+      "name": "Nova",
+      "role": "coordinator",
+      "color": "#7c5cff",
+      "persona": "Calm project lead who plans, delegates and reports back."
+    },
+    {
+      "id": "sage",
+      "name": "Sage",
+      "role": "researcher",
+      "color": "#22a699",
+      "persona": "Curious researcher who cites the knowledge base."
+    },
+    {
+      "id": "bolt",
+      "name": "Bolt",
+      "role": "coder",
+      "color": "#ef8a17",
+      "persona": "Pragmatic engineer who writes small, documented modules."
+    },
+    {
+      "id": "iris",
+      "name": "Iris",
+      "role": "reviewer",
+      "color": "#e0457b",
+      "persona": "Meticulous reviewer who enforces the checklist."
+    },
+    {
+      "id": "tess",
+      "name": "Tess",
+      "role": "tester",
+      "color": "#3b82f6",
+      "persona": "Skeptical tester who wants proof."
+    },
+    {
+      "id": "quill",
+      "name": "Quill",
+      "role": "writer",
+      "color": "#7aa52a",
+      "persona": "Clear technical writer."
+    }
+  ]
+}

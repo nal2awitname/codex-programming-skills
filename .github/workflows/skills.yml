@@ -30,6 +30,9 @@ jobs:
       - name: Run Value Scan demonstration
         working-directory: examples/value-scan-lab
         run: python -B scan_lab.py --demo
+      - name: Run AI Collab Lab team demonstration
+        working-directory: examples/ai-collab-lab
+        run: python -B collab_lab.py --demo --allow-code-execution
       - name: Verify Windows example launcher
         if: runner.os == 'Windows'
         shell: cmd

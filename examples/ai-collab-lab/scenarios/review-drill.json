@@ -1,0 +1,40 @@
+{
+  "name": "Code review drill",
+  "description": "A legacy file with style problems: the reviewer requests changes, the coder fixes them, the reviewer approves.",
+  "agents": [
+    {
+      "id": "nova",
+      "name": "Nova",
+      "role": "coordinator",
+      "color": "#7c5cff",
+      "persona": "Calm project lead who plans, delegates and reports back."
+    },
+    {
+      "id": "bolt",
+      "name": "Bolt",
+      "role": "coder",
+      "color": "#ef8a17",
+      "persona": "Pragmatic engineer who writes small, documented modules."
+    },
+    {
+      "id": "iris",
+      "name": "Iris",
+      "role": "reviewer",
+      "color": "#e0457b",
+      "persona": "Meticulous reviewer who enforces the checklist."
+    }
+  ],
+  "files": [
+    {
+      "path": "src/legacy.py",
+      "content": "def area(width, height):\n\treturn width * height   \n\n\ndef perimeter(width, height):\n    return 2 * (width + height)"
+    }
+  ],
+  "tasks": [
+    {
+      "title": "Review: legacy geometry helpers",
+      "description": "Project: legacy\nRequest: Review src/legacy.py and get it to pass the checklist.\nModule: legacy",
+      "assignee": "iris"
+    }
+  ]
+}

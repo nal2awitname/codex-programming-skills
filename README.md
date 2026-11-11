@@ -11,6 +11,11 @@
 | [analyze-and-rebuild](skills/analyze-and-rebuild/SKILL.md) | วิเคราะห์หลักฐาน สร้าง contract และเขียนใหม่โดยไม่คัดลอก |
 | [rebuild-windows-from-behavior](skills/rebuild-windows-from-behavior/SKILL.md) | วิเคราะห์และสร้างโปรแกรม Windows ใหม่จากพฤติกรรมที่ตรวจได้ |
 
+## โปรแกรมตัวอย่างและสกิลเสริม
+
+- [AI Collab Lab](examples/ai-collab-lab/README_TH.md): GUI บนเบราว์เซอร์ที่จำลองออฟฟิศให้ทีม AI สื่อสารและช่วยกันทำงานผ่านเครื่องมือ 30 ชนิด (แชต บอร์ดงาน ไฟล์ คลังความรู้ โหวต) รันออฟไลน์ได้ทันทีด้วย `python collab_lab.py` หรือเปลี่ยนเอเจนต์เป็น Claude
+- [skill for creating code](skill%20for%20creating%20code/README_TH.md): สกิลเสริมที่จัดตามหมวด เช่น `multi-agent-collab-lab` สำหรับเพิ่มเครื่องมือ บทบาท หรือโมเดลให้ AI Collab Lab ติดตั้งด้วย `--source "skill for creating code"`
+
 ## ติดตั้งจากแพ็กเกจหรือ checkout
 
 ใช้ Python 3.10+ ไม่ต้องเพิ่ม Python dependencies แตก source ZIP หรือ clone repository แล้วรันจากโฟลเดอร์ที่มี `scripts/` ระบุปลายทางเป็นโฟลเดอร์สกิลของโครงการหรือบัญชีที่ต้องการ:

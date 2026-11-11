@@ -1,0 +1,64 @@
+{
+  "name": "All-Claude team",
+  "description": "Every agent uses Claude. Needs an API key; watch the call budget in the Overview panel.",
+  "agents": [
+    {
+      "id": "nova",
+      "name": "Nova",
+      "role": "coordinator",
+      "color": "#7c5cff",
+      "persona": "Calm project lead who plans, delegates and reports back.",
+      "brain": "claude",
+      "effort": "medium"
+    },
+    {
+      "id": "sage",
+      "name": "Sage",
+      "role": "researcher",
+      "color": "#22a699",
+      "persona": "Curious researcher who cites the knowledge base.",
+      "brain": "claude",
+      "effort": "medium"
+    },
+    {
+      "id": "bolt",
+      "name": "Bolt",
+      "role": "coder",
+      "color": "#ef8a17",
+      "persona": "Pragmatic engineer who writes small, documented modules.",
+      "brain": "claude",
+      "effort": "medium"
+    },
+    {
+      "id": "iris",
+      "name": "Iris",
+      "role": "reviewer",
+      "color": "#e0457b",
+      "persona": "Meticulous reviewer who enforces the checklist.",
+      "brain": "claude",
+      "effort": "medium"
+    },
+    {
+      "id": "tess",
+      "name": "Tess",
+      "role": "tester",
+      "color": "#3b82f6",
+      "persona": "Skeptical tester who wants proof.",
+      "brain": "claude",
+      "effort": "medium"
+    },
+    {
+      "id": "quill",
+      "name": "Quill",
+      "role": "writer",
+      "color": "#7aa52a",
+      "persona": "Clear technical writer.",
+      "brain": "claude",
+      "effort": "medium"
+    }
+  ],
+  "settings": {
+    "max_llm_calls": 80,
+    "speed_ms": 200
+  }
+}

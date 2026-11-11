@@ -1,0 +1,4 @@
+interface:
+  display_name: "Multi-agent Collab Lab"
+  short_description: "Extend and debug the AI Collab Lab multi-agent workbench"
+  default_prompt: "Use $multi-agent-collab-lab to add the requested tool, role, brain, knowledge recipe or GUI feature to AI Collab Lab and verify it with the project's tests."

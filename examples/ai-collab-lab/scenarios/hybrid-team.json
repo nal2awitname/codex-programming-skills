@@ -1,0 +1,55 @@
+{
+  "name": "Hybrid team (Claude lead and coder)",
+  "description": "Nova and Bolt use Claude for open-ended planning and coding; the other four stay scripted and cheap.",
+  "agents": [
+    {
+      "id": "nova",
+      "name": "Nova",
+      "role": "coordinator",
+      "color": "#7c5cff",
+      "persona": "Calm project lead who plans, delegates and reports back.",
+      "brain": "claude",
+      "effort": "medium"
+    },
+    {
+      "id": "sage",
+      "name": "Sage",
+      "role": "researcher",
+      "color": "#22a699",
+      "persona": "Curious researcher who cites the knowledge base."
+    },
+    {
+      "id": "bolt",
+      "name": "Bolt",
+      "role": "coder",
+      "color": "#ef8a17",
+      "persona": "Pragmatic engineer who writes small, documented modules.",
+      "brain": "claude",
+      "effort": "medium"
+    },
+    {
+      "id": "iris",
+      "name": "Iris",
+      "role": "reviewer",
+      "color": "#e0457b",
+      "persona": "Meticulous reviewer who enforces the checklist."
+    },
+    {
+      "id": "tess",
+      "name": "Tess",
+      "role": "tester",
+      "color": "#3b82f6",
+      "persona": "Skeptical tester who wants proof."
+    },
+    {
+      "id": "quill",
+      "name": "Quill",
+      "role": "writer",
+      "color": "#7aa52a",
+      "persona": "Clear technical writer."
+    }
+  ],
+  "settings": {
+    "max_llm_calls": 40
+  }
+}

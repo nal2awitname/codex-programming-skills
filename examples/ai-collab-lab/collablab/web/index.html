@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Collab Lab</title>
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/static/icon.svg" alt="" width="28" height="28">
+      <div>
+        <strong>AI Collab Lab</strong>
+        <span class="muted small">multi-agent workbench</span>
+      </div>
+    </div>
+    <div class="engine" id="engine-status" aria-live="polite">
+      <span class="dot"></span><span class="label">connecting…</span>
+      <span class="tick" id="tick">tick 0</span>
+    </div>
+    <div class="controls" role="toolbar" aria-label="Simulation controls">
+      <button class="btn primary" data-control="run" title="Run until everyone is idle">▶ Run</button>
+      <button class="btn" data-control="pause" title="Pause after the current turn">⏸ Pause</button>
+      <button class="btn" data-control="step" title="Advance one tick">⏭ Step</button>
+      <button class="btn ghost" data-control="reset" title="Clear the world and restore the default team">↺ Reset</button>
+      <select id="scenario-select" class="select" aria-label="Load scenario">
+        <option value="">Load scenario…</option>
+      </select>
+      <button class="btn ghost icon" id="open-settings" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="panel team" aria-label="Team">
+      <div class="panel-head">
+        <h2>Team</h2>
+        <button class="btn small" id="add-agent">+ Agent</button>
+      </div>
+      <div id="team-list" class="team-list"></div>
+      <div class="legend small muted">
+        <span><i class="badge sim">SIM</i> rule-based offline</span>
+        <span><i class="badge ai">CLAUDE</i> real model</span>
+      </div>
+    </aside>
+
+    <section class="panel stage" aria-label="Workspace">
+      <nav class="tabs" role="tablist" id="main-tabs">
+        <button role="tab" data-tab="chat" class="active">Chat</button>
+        <button role="tab" data-tab="tasks">Tasks <span class="count" id="count-tasks"></span></button>
+        <button role="tab" data-tab="files">Files <span class="count" id="count-files"></span></button>
+        <button role="tab" data-tab="activity">Activity</button>
+        <button role="tab" data-tab="network">Network</button>
+        <button role="tab" data-tab="tools">Tools</button>
+        <button role="tab" data-tab="knowledge">Knowledge</button>
+      </nav>
+
+      <div class="tab-body" data-pane="chat">
+        <div class="chat">
+          <div class="conversations" id="conversations"></div>
+          <div class="thread">
+            <div class="thread-head" id="thread-head"></div>
+            <div class="messages" id="messages" aria-live="polite"></div>
+            <div class="suggestions" id="suggestions"></div>
+            <form class="composer" id="composer">
+              <label class="sr-only" for="composer-to">Send to</label>
+              <select id="composer-to" class="select"></select>
+              <label class="sr-only" for="composer-text">Message</label>
+              <textarea id="composer-text" rows="2" placeholder="Ask the team for something… (Enter to send, Shift+Enter for a new line)"></textarea>
+              <button class="btn primary" type="submit">Send</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-body" data-pane="tasks" hidden>
+        <div class="pane-head">
+          <p class="muted">Every task has one owner. Agents move cards as they work; you can too.</p>
+          <button class="btn small" id="new-task">+ Task</button>
+        </div>
+        <div class="kanban" id="kanban"></div>
+      </div>
+
+      <div class="tab-body" data-pane="files" hidden>
+        <div class="files">
+          <div class="file-list">
+            <div class="pane-head">
+              <strong>Workspace</strong>
+              <button class="btn small" id="new-file">+ File</button>
+            </div>
+            <div id="file-tree"></div>
+          </div>
+          <div class="file-view" id="file-view">
+            <div class="empty">Select a file. Agents write research notes, code, tests, docs and reports here.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-body" data-pane="activity" hidden>
+        <div class="pane-head filters">
+          <select id="filter-type" class="select" aria-label="Event type">
+            <option value="">All events</option>
+            <option value="message">Messages</option>
+            <option value="tool_call">Tool calls</option>
+            <option value="task">Tasks</option>
+            <option value="file">Files</option>
+            <option value="thought">Thoughts</option>
+            <option value="poll">Polls &amp; votes</option>
+            <option value="error">Errors</option>
+          </select>
+          <select id="filter-actor" class="select" aria-label="Actor"><option value="">Everyone</option></select>
+          <label class="check"><input type="checkbox" id="follow-activity" checked> Follow</label>
+        </div>
+        <ol class="timeline" id="timeline"></ol>
+      </div>
+
+      <div class="tab-body" data-pane="network" hidden>
+        <div class="pane-head">
+          <p class="muted">Who talks to whom. Lines thicken with traffic; recent messages travel as pulses.</p>
+        </div>
+        <div class="network-wrap"><svg id="network" viewBox="0 0 640 460" role="img" aria-label="Communication graph"></svg></div>
+      </div>
+
+      <div class="tab-body" data-pane="tools" hidden>
+        <div class="tools">
+          <div class="tool-list" id="tool-list"></div>
+          <div class="tool-console">
+            <div id="tool-form" class="tool-form"><div class="empty">Pick a tool. You can use the same tools the agents use; your calls appear in the activity log as “You”.</div></div>
+            <pre id="tool-result" class="result" hidden></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-body" data-pane="knowledge" hidden>
+        <div class="knowledge">
+          <div class="kb-list">
+            <form id="kb-search" class="kb-search">
+              <input id="kb-query" type="search" placeholder="Search recipes and articles…" aria-label="Search knowledge">
+            </form>
+            <button class="btn small" id="kb-add">+ Add note</button>
+            <div id="kb-results"></div>
+          </div>
+          <div class="kb-view" id="kb-view">
+            <div class="empty">The knowledge base is what scripted agents “know”. Add a note with a <code>python module</code> code block to teach the coder something new, then say “retry”.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="panel side" aria-label="Overview">
+      <section class="card">
+        <h3>Overview</h3>
+        <dl class="stats" id="stats"></dl>
+        <p class="small muted" id="engine-detail"></p>
+      </section>
+      <section class="card">
+        <h3>Polls</h3>
+        <div id="polls"><p class="muted small">No polls yet.</p></div>
+      </section>
+      <section class="card">
+        <h3>Blackboard</h3>
+        <div id="facts"><p class="muted small">Shared facts appear here.</p></div>
+      </section>
+    </aside>
+  </main>
+
+  <dialog id="modal" class="modal">
+    <form method="dialog" class="modal-card" id="modal-form">
+      <header class="modal-head"><h2 id="modal-title"></h2><button class="btn ghost icon" value="cancel" aria-label="Close">✕</button></header>
+      <div class="modal-body" id="modal-body"></div>
+      <footer class="modal-foot" id="modal-foot"></footer>
+    </form>
+  </dialog>
+  <div class="toasts" id="toasts" aria-live="assertive"></div>
+  <input type="file" id="import-file" accept="application/json" hidden>
+  <script src="/static/app.js"></script>
+</body>
+</html>
